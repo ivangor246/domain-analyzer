@@ -1,0 +1,16 @@
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    env_file:
+      - .env
+    environment:
+      - DEV_MODE  # Setup in Makefile (True/False)
+    ports:
+      - 8000:8000
+    develop:
+      watch:
+        - action: sync
+          path: ./src
+          target: /project/src
