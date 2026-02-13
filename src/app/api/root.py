@@ -1,9 +1,9 @@
 from fastapi import APIRouter
 
-from .hi import hi_router
+from .domain import domain_router
 
 ROUTERS: list[APIRouter] = [
-    hi_router,
+    domain_router,
 ]
 
 root_router = APIRouter(prefix='/api')

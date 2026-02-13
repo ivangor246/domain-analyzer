@@ -9,6 +9,8 @@ class Config(BaseSettings):
     DEBUG: bool = Field(default=False, alias='DEV_MODE')
     DOCS: bool = Field(default=False, alias='DOCS')
 
+    BOOTSTRAP_URL: str = 'https://data.iana.org/rdap/dns.json'
+
     @property
     def DOCS_URL(self) -> str | None:
         return '/api/docs' if self.DOCS else None
