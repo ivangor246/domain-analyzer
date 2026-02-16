@@ -7,19 +7,19 @@ import httpx
 from app.core.config import config
 
 
-class RDAPBootstrapService:
+class RDAPBootstrap:
     """
     Use a get_instance method to obtain a class instance:
-        RDAPBootstrapService.get_instance()
+        RDAPBootstrap.get_instance()
     """
 
-    _instance: ClassVar[RDAPBootstrapService] | None = None
+    _instance: ClassVar[RDAPBootstrap] | None = None
 
     def __init__(self):
         self.data: dict[str, list[str]] = {}
 
     @classmethod
-    async def get_instance(cls) -> RDAPBootstrapService:
+    async def get_instance(cls) -> RDAPBootstrap:
         if cls._instance is None:
             instance = cls()
             await instance.load()

@@ -1,6 +1,6 @@
 from fastapi import APIRouter, HTTPException, Query
 
-from app.core.exceptions import DomainValidationError
+from app.core.exceptions import DomainValidationError, RDAPError
 from app.schemas.domain import DomainSchema
 from app.services.domain import DomainService
 
@@ -11,13 +11,12 @@ service = DomainService()
 
 @domain_router.get('')
 async def analyze_domain(
-    d: str = Query(..., description='target domain'),
+    d: str = Query(..., description='Target domain'),
 ) -> DomainSchema:
 
     try:
         return await service.analyze(domain=d)
     except DomainValidationError as e:
-        raise HTTPException(
-            status_code=400,
-            detail=str(e),
-        )
+        raise HTTPException(status_code=400, detail=str(e))
+    except RDAPError as e:
+        raise HTTPException(status_code=502, detail=str(e))
