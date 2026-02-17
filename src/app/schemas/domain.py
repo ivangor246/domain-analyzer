@@ -3,6 +3,7 @@ from datetime import datetime
 from pydantic import Field
 
 from .base import BaseSchema
+from .dns import DNSSchema
 
 
 class DomainSchema(BaseSchema):
@@ -15,3 +16,4 @@ class DomainSchema(BaseSchema):
     expiration_date: datetime | None = Field(None, description='Domain expiration date')
     updated_date: datetime | None = Field(None, description='Last update date')
     whois_server: str | None = Field(None, description='WHOIS server hostname')
+    dns: DNSSchema = Field(default_factory=DNSSchema, description='DNS records')

@@ -10,6 +10,7 @@ class Config(BaseSettings):
     DOCS: bool = Field(default=False, alias='DOCS')
 
     BOOTSTRAP_URL: str = 'https://data.iana.org/rdap/dns.json'
+    DNS_SERVERS: list[str] = ['8.8.8.8', '1.1.1.1']
 
     @property
     def DOCS_URL(self) -> str | None:

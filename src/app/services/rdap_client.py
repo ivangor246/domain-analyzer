@@ -36,7 +36,7 @@ class RDAPClient:
     def _parse(server: str, data: dict) -> RDAPResponse:
         events = {e['eventAction']: e['eventDate'] for e in data.get('events', [])}
 
-        nameservers = [ns['ldhName'].lower() for ns in data.get('nameservers', []) if 'ldnName in ns']
+        nameservers = [ns['ldhName'].lower() for ns in data.get('nameservers', []) if 'ldhName' in ns]
 
         registrar = None
         for entity in data.get('entities', []):
