@@ -5,6 +5,7 @@ from app.schemas.dns import DNSSchema
 from app.schemas.domain import DomainSchema
 from app.utils.domain_validator import validate_domain
 
+from .dns_propagation import DNSPropagation
 from .dns_resolver import DNSResolver
 from .rdap_bootstrap import RDAPBootstrap
 from .rdap_client import RDAPClient
@@ -19,22 +20,23 @@ class DomainService:
         except ValueError as e:
             raise DomainValidationError(str(e))
 
-        rdap_result, dns_result = await asyncio.gather(
+        rdap_result, dns_result, propagation_result = await asyncio.gather(
             RDAPClient.query(domain=domain, servers=servers),
             DNSResolver.resolve(domain=domain),
+            DNSPropagation.check(domain=domain),
         )
 
-        dns_data = dns_result
         dns_schema = DNSSchema(
-            A=dns_data.A,
-            AAAA=dns_data.AAAA,
-            MX=dns_data.MX,
-            TXT=dns_data.TXT,
-            CNAME=dns_data.CNAME,
-            NS=dns_data.NS,
-            SOA=dns_data.SOA,
-            CAA=dns_data.CAA,
-            PTR=dns_data.PTR,
+            A=dns_result.A,
+            AAAA=dns_result.AAAA,
+            MX=dns_result.MX,
+            TXT=dns_result.TXT,
+            CNAME=dns_result.CNAME,
+            NS=dns_result.NS,
+            SOA=dns_result.SOA,
+            CAA=dns_result.CAA,
+            PTR=dns_result.PTR,
+            propagation=propagation_result,
         )
 
         return DomainSchema(
