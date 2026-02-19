@@ -6,6 +6,7 @@ from .base import BaseSchema
 from .dns import DNSSchema
 from .geoip import GeoIPRecord
 from .http import HTTPSchema
+from .latency import LatencySchema
 from .ports import PortsSchema
 from .ssl import SSLSchema
 
@@ -25,3 +26,4 @@ class DomainSchema(BaseSchema):
     http: HTTPSchema | None = Field(None, description='HTTP / HTTPS probe results with response headers')
     ssl: SSLSchema | None = Field(None, description='SSL/TLS certificate and connection details')
     ports: PortsSchema | None = Field(None, description='TCP port scan results for common service ports')
+    latency: LatencySchema | None = Field(None, description='TCP latency probes to port 80 and 443 (min/avg/max/loss)')

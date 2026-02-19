@@ -11,6 +11,7 @@ from .geoip import GeoIPService
 from .http_headers import HTTPHeadersService
 from .rdap_bootstrap import RDAPBootstrap
 from .rdap_client import RDAPClient
+from .latency import LatencyService
 from .port_scanner import PortScanner
 from .ssl_cert import SSLCertService
 
@@ -24,13 +25,14 @@ class DomainService:
         except ValueError as e:
             raise DomainValidationError(str(e))
 
-        rdap_result, dns_result, propagation_result, http_result, ssl_result, ports_result = await asyncio.gather(
+        rdap_result, dns_result, propagation_result, http_result, ssl_result, ports_result, latency_result = await asyncio.gather(
             RDAPClient.query(domain=rdap_domain, servers=servers),
             DNSResolver.resolve(domain=domain),
             DNSPropagation.check(domain=domain),
             HTTPHeadersService.probe(domain=domain),
             SSLCertService.check(domain=domain),
             PortScanner.scan(host=domain),
+            LatencyService.measure(host=domain),
         )
 
         all_ips = dns_result.A + dns_result.AAAA
@@ -64,4 +66,5 @@ class DomainService:
             http=http_result,
             ssl=ssl_result,
             ports=ports_result,
+            latency=latency_result,
         )
