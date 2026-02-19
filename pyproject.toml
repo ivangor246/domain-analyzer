@@ -26,6 +26,7 @@ gunicorn = "^25.0.3"
 idna = "^3.11"
 httpx = "^0.28.1"
 dnspython = "^2.8.0"
+cryptography = "^44.0.0"
 
 [tool.poetry.group.dev.dependencies]
 ruff = "^0.15.0"
