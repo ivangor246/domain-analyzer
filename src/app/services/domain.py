@@ -7,6 +7,7 @@ from app.utils.domain_validator import validate_domain
 
 from .dns_propagation import DNSPropagation
 from .dns_resolver import DNSResolver
+from .geoip import GeoIPService
 from .rdap_bootstrap import RDAPBootstrap
 from .rdap_client import RDAPClient
 
@@ -25,6 +26,9 @@ class DomainService:
             DNSResolver.resolve(domain=domain),
             DNSPropagation.check(domain=domain),
         )
+
+        all_ips = dns_result.A + dns_result.AAAA
+        geoip_result = await GeoIPService.lookup(ips=all_ips)
 
         dns_schema = DNSSchema(
             A=dns_result.A,
@@ -50,4 +54,5 @@ class DomainService:
             updated_date=rdap_result.updated_date,
             whois_server=rdap_result.whois_server,
             dns=dns_schema,
+            geoip=geoip_result,
         )

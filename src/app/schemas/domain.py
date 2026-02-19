@@ -4,6 +4,7 @@ from pydantic import Field
 
 from .base import BaseSchema
 from .dns import DNSSchema
+from .geoip import GeoIPRecord
 
 
 class DomainSchema(BaseSchema):
@@ -17,3 +18,4 @@ class DomainSchema(BaseSchema):
     updated_date: datetime | None = Field(None, description='Last update date')
     whois_server: str | None = Field(None, description='WHOIS server hostname')
     dns: DNSSchema = Field(default_factory=DNSSchema, description='DNS records')
+    geoip: dict[str, GeoIPRecord] = Field(default_factory=dict, description='GeoIP / ASN data keyed by IP address')
