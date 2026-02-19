@@ -40,8 +40,16 @@ class RDAPBootstrap:
 
         self.data = mapping
 
-    def get_servers(self, domain: str) -> list[str]:
-        tld = domain.split('.')[-1].lower()
-        if tld not in self.data:
-            raise ValueError(f'No RDAP server for TLD: {tld}')
-        return self.data[tld]
+    def get_servers(self, domain: str) -> tuple[list[str], str]:
+        """Return (rdap_servers, registrable_domain).
+
+        Tries suffixes from longest to shortest to correctly handle
+        multi-label TLDs such as co.uk or com.br.
+        """
+        labels = domain.split('.')
+        for n in range(len(labels) - 1, 0, -1):
+            tld = '.'.join(labels[n:]).lower()
+            if tld in self.data:
+                rdap_domain = '.'.join(labels[n - 1:])
+                return self.data[tld], rdap_domain
+        raise ValueError(f'No RDAP server for domain: {domain}')

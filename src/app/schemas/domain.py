@@ -6,6 +6,7 @@ from .base import BaseSchema
 from .dns import DNSSchema
 from .geoip import GeoIPRecord
 from .http import HTTPSchema
+from .ports import PortsSchema
 from .ssl import SSLSchema
 
 
@@ -23,3 +24,4 @@ class DomainSchema(BaseSchema):
     geoip: dict[str, GeoIPRecord] = Field(default_factory=dict, description='GeoIP / ASN data keyed by IP address')
     http: HTTPSchema | None = Field(None, description='HTTP / HTTPS probe results with response headers')
     ssl: SSLSchema | None = Field(None, description='SSL/TLS certificate and connection details')
+    ports: PortsSchema | None = Field(None, description='TCP port scan results for common service ports')
