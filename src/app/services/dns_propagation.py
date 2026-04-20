@@ -15,7 +15,9 @@ class DNSPropagation:
         servers = list(await asyncio.gather(*tasks))
 
         ok_servers = [s for s in servers if s.status == 'ok']
-        consistent = len({(tuple(sorted(s.A)), tuple(sorted(s.AAAA))) for s in ok_servers}) <= 1 if ok_servers else False
+        consistent = (
+            len({(tuple(sorted(s.A)), tuple(sorted(s.AAAA))) for s in ok_servers}) <= 1 if ok_servers else False
+        )
 
         return PropagationSchema(consistent=consistent, servers=servers)
 
