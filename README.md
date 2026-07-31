@@ -15,6 +15,8 @@ For a validated domain, the backend can collect:
 - TCP status for common service ports;
 - TCP connection latency for ports 80 and 443.
 
+If one external check is unavailable, the response still contains the successful results and lists the failed checks in `analysis_errors`.
+
 Some results depend on the availability of the target domain and external services, including IANA RDAP bootstrap data, DNS resolvers, and the GeoIP provider.
 
 ## Repository layout

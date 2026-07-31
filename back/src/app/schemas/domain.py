@@ -11,9 +11,15 @@ from .ports import PortsSchema
 from .ssl import SSLSchema
 
 
+class AnalysisError(BaseSchema):
+    check: str = Field(..., description='Analysis check that failed')
+    code: str = Field(..., description='Stable error code')
+    message: str = Field(..., description='Human-readable error message')
+
+
 class DomainSchema(BaseSchema):
     domain: str = Field(..., description='Normalized domain in punycode')
-    rdap_server: str = Field(..., description='RDAP server used for query')
+    rdap_server: str | None = Field(None, description='RDAP server used for query')
     status: list[str] = Field(default_factory=list, description='Domain status codes')
     nameservers: list[str] = Field(default_factory=list, description='Nameserver hostnames')
     registrar: str | None = Field(None, description='Registrar name')
@@ -27,3 +33,7 @@ class DomainSchema(BaseSchema):
     ssl: SSLSchema | None = Field(None, description='SSL/TLS certificate and connection details')
     ports: PortsSchema | None = Field(None, description='TCP port scan results for common service ports')
     latency: LatencySchema | None = Field(None, description='TCP latency probes to port 80 and 443 (min/avg/max/loss)')
+    analysis_errors: list[AnalysisError] = Field(
+        default_factory=list,
+        description='Analysis checks that failed while other results were collected',
+    )

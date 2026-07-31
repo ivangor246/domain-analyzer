@@ -15,13 +15,10 @@ class GeoIPService:
 
         payload = [{'query': ip, 'fields': _FIELDS} for ip in ips]
 
-        try:
-            async with httpx.AsyncClient(timeout=10) as client:
-                response = await client.post(GeoIPService._API_URL, json=payload)
-                response.raise_for_status()
-                data: list[dict] = response.json()
-        except Exception:
-            return {}
+        async with httpx.AsyncClient(timeout=10) as client:
+            response = await client.post(GeoIPService._API_URL, json=payload)
+            response.raise_for_status()
+            data: list[dict] = response.json()
 
         result: dict[str, GeoIPRecord] = {}
         for item in data:
