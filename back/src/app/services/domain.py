@@ -1,4 +1,5 @@
 import asyncio
+import logging
 from typing import Any, Awaitable, TypeVar
 
 from app.core.exceptions import DomainValidationError
@@ -21,6 +22,8 @@ from .rdap_bootstrap import RDAPBootstrap
 from .rdap_client import RDAPClient, RDAPResponse
 from .ssl_cert import SSLCertService
 
+logger = logging.getLogger(__name__)
+
 T = TypeVar('T')
 
 _ANALYSIS_FAILURES: dict[str, tuple[str, str]] = {
@@ -37,6 +40,7 @@ _ANALYSIS_FAILURES: dict[str, tuple[str, str]] = {
 
 def _analysis_error(check: str) -> AnalysisError:
     code, message = _ANALYSIS_FAILURES[check]
+    logger.warning('domain analysis check failed', extra={'check': check})
     return AnalysisError(check=check, code=code, message=message)
 
 
@@ -116,6 +120,7 @@ class DomainService:
         except ValueError as e:
             raise DomainValidationError(str(e)) from e
 
+        logger.info('domain analysis started', extra={'domain': domain})
         errors: list[AnalysisError] = []
         servers, rdap_domain = await _load_rdap_context(domain, errors)
         raw_results = await _collect_results(domain, servers, rdap_domain)
@@ -144,7 +149,7 @@ class DomainService:
             propagation=propagation_result,
         )
 
-        return DomainSchema(
+        result = DomainSchema(
             domain=domain,
             rdap_server=rdap_result.server if rdap_result else None,
             status=rdap_result.status if rdap_result else [],
@@ -162,3 +167,8 @@ class DomainService:
             latency=latency_result,
             analysis_errors=errors,
         )
+        logger.info(
+            'domain analysis completed',
+            extra={'domain': domain, 'error_count': len(errors)},
+        )
+        return result

@@ -74,6 +74,8 @@ make clear    # Remove services, volumes, images, and orphans
 
 The API is available at `http://localhost:8000`.
 
+Application logs are emitted as one JSON object per line. Each response includes an `X-Request-ID` header that can be used to correlate HTTP and analysis logs.
+
 ## Run locally
 
 ```bash
