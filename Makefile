@@ -1,18 +1,20 @@
+BACKEND_COMPOSE := back/docker-compose.yml
+
 # develop
 up:
-	docker compose -f docker-compose.yml up -d --build --force-recreate $(for)
+	docker compose -f $(BACKEND_COMPOSE) up -d --build --force-recreate $(for)
 
 dev:
-	DEV_MODE=True docker compose -f docker-compose.yml watch
+	DEV_MODE=True docker compose -f $(BACKEND_COMPOSE) watch
 
 stop:
-	docker compose -f docker-compose.yml stop $(for)
+	docker compose -f $(BACKEND_COMPOSE) stop $(for)
 
 rm:
-	docker compose -f docker-compose.yml down -v $(for)
+	docker compose -f $(BACKEND_COMPOSE) down -v $(for)
 
 logs:
-	docker compose -f docker-compose.yml logs $(for)
+	docker compose -f $(BACKEND_COMPOSE) logs $(for)
 
 clear:
-	docker compose -f docker-compose.yml down -v --rmi all --remove-orphans $(for)
+	docker compose -f $(BACKEND_COMPOSE) down -v --rmi all --remove-orphans $(for)
