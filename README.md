@@ -95,6 +95,17 @@ curl 'http://localhost:8000/api/health'
 
 The endpoint returns `{"status":"ok"}` when the process is ready to handle requests.
 
+API errors use a consistent JSON shape:
+
+```json
+{
+  "code": "invalid_domain",
+  "message": "Invalid domain format"
+}
+```
+
+Validation errors may also include a `details` array with the invalid request locations.
+
 Analyze a domain with:
 
 ```bash
