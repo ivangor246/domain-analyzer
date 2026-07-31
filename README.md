@@ -87,6 +87,14 @@ poetry run uvicorn app.main:create_app \
 
 ## API
 
+Check that the service is running without triggering any external analysis:
+
+```bash
+curl 'http://localhost:8000/api/health'
+```
+
+The endpoint returns `{"status":"ok"}` when the process is ready to handle requests.
+
 Analyze a domain with:
 
 ```bash

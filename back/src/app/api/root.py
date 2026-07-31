@@ -1,8 +1,10 @@
 from fastapi import APIRouter
 
 from .domain import domain_router
+from .health import health_router
 
 ROUTERS: list[APIRouter] = [
+    health_router,
     domain_router,
 ]
 
