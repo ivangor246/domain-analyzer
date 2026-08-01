@@ -1,5 +1,5 @@
 from datetime import datetime
-from urllib.parse import urlparse
+from urllib.parse import ParseResult, urlparse, urlunparse
 
 import httpx
 from pydantic import BaseModel, Field
@@ -59,6 +59,31 @@ class RDAPClient:
         raise RDAPError(f'All RDAP servers failed for domain: {domain}')
 
     @staticmethod
+    def _fixed_server_url(
+        parsed_server: ParseResult,
+        domain: str,
+        target_ip: str,
+    ) -> tuple[str, dict[str, str], dict[str, str]]:
+        hostname = parsed_server.hostname
+        if not hostname:
+            raise ValueError('RDAP server hostname is missing.')
+
+        target_host = f'[{target_ip}]' if ':' in target_ip else target_ip
+        port = f':{parsed_server.port}' if parsed_server.port is not None else ''
+        request_url = urlunparse(
+            (
+                parsed_server.scheme,
+                f'{target_host}{port}',
+                f'{parsed_server.path.rstrip("/")}/domain/{domain}',
+                '',
+                '',
+                '',
+            )
+        )
+        host = f'[{hostname}]' if ':' in hostname else hostname
+        return request_url, {'Host': f'{host}{port}'}, {'sni_hostname': hostname}
+
+    @staticmethod
     async def _query_server(client: httpx.AsyncClient, domain: str, server: str) -> RDAPResponse | None:
         try:
             parsed_server = urlparse(server.strip())
@@ -70,21 +95,25 @@ class RDAPClient:
             or not parsed_server.hostname
             or parsed_server.username
             or parsed_server.password
+            or parsed_server.params
             or parsed_server.query
             or parsed_server.fragment
         ):
             return None
         try:
-            await NetworkTargetGuard.validate(parsed_server.hostname)
+            target_ip = (await NetworkTargetGuard.resolve_public_ips(parsed_server.hostname))[0]
         except Exception:
             return None
 
-        url = f'{parsed_server.geturl().rstrip("/")}/domain/{domain}'
+        try:
+            url, headers, extensions = RDAPClient._fixed_server_url(parsed_server, domain, target_ip)
+        except ValueError:
+            return None
         provider_key = f'rdap:{parsed_server.geturl().rstrip("/")}'
         try:
 
             async def fetch() -> object:
-                async with client.stream('GET', url) as response:
+                async with client.stream('GET', url, headers=headers, extensions=extensions) as response:
                     response.raise_for_status()
                     content = await read_limited_response(response, settings.HTTP_MAX_RESPONSE_BYTES)
                 return parse_json(content)

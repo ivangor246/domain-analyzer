@@ -84,7 +84,11 @@ class ProviderCacheTests(unittest.IsolatedAsyncioTestCase):
         first_client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
         with (
             patch.object(rdap_client.httpx, 'AsyncClient', return_value=first_client) as client_mock,
-            patch.object(rdap_client.NetworkTargetGuard, 'validate', new=AsyncMock()),
+            patch.object(
+                rdap_client.NetworkTargetGuard,
+                'resolve_public_ips',
+                new=AsyncMock(return_value=['203.0.113.11']),
+            ),
         ):
             first = await RDAPClient.query('Example.COM', [server])
         client_mock.assert_called_once()

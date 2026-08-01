@@ -117,7 +117,7 @@ function addHTTPSFindings(
     return assessedSignals
   }
 
-  if (http?.reachable && http.final_url?.startsWith('http://')) {
+  if (http?.reachable && !http.final_url?.startsWith('https://')) {
     pushFinding(
       findings,
       'http-not-redirected',
@@ -203,7 +203,7 @@ export function getSecuritySummary(analysis: DomainAnalysis): SecuritySummary {
           deductions += check.deduction
         }
       }
-      if (analysis.http.http?.reachable && analysis.http.http.final_url?.startsWith('http://')) {
+      if (analysis.http.http?.reachable && !analysis.http.http.final_url?.startsWith('https://')) {
         deductions += 10
       }
     }

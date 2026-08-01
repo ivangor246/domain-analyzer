@@ -4,6 +4,7 @@ from unittest.mock import patch
 
 from app.core.config import settings
 from app.core.exceptions import AnalysisTimeoutError
+from app.schemas.analysis import ANALYSIS_CHECKS
 from app.schemas.dns import PropagationSchema
 from app.schemas.http import HTTPSchema
 from app.schemas.latency import LatencySchema
@@ -33,6 +34,13 @@ class FakeBootstrap:
 
     def get_servers(self, domain: str) -> tuple[list[str], str]:
         return ['https://rdap.test'], domain
+
+
+class SlowBootstrap:
+    @classmethod
+    async def get_instance(cls):
+        await asyncio.sleep(1)
+        return cls()
 
 
 class FakeRDAP:
@@ -144,6 +152,36 @@ class DomainServiceTestCase(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual(result.dns.A, [])
         self.assertIn('dns_timeout', {error.code for error in result.analysis_errors})
+
+    async def test_global_deadline_marks_unstarted_checks_as_timed_out(self) -> None:
+        dependencies = DomainDependencies(
+            rdap_bootstrap=SlowBootstrap,
+            rdap_client=FakeRDAP,
+            dns_resolver=FakeDNS,
+            dns_propagation=FakePropagation,
+            geoip_service=FakeGeoIP,
+            http_service=FakeHTTP,
+            ssl_service=FakeSSL,
+            port_scanner=FakePorts,
+            latency_service=FakeLatency,
+            network_guard=FakeGuard,
+        )
+        progress: list[tuple[str, str, float | None]] = []
+
+        async def on_progress(check: str, status: str, duration_ms: float | None = None) -> None:
+            progress.append((check, status, duration_ms))
+
+        with patch.object(settings, 'ANALYSIS_TIMEOUT_SECONDS', 0.01):
+            result = await DomainService(dependencies).analyze('example.com', progress_callback=on_progress)
+
+        self.assertEqual({error.check for error in result.analysis_errors}, set(ANALYSIS_CHECKS))
+        self.assertIsNotNone(result.metadata)
+        self.assertEqual(set(result.metadata.checks), set(ANALYSIS_CHECKS))
+        self.assertTrue(all(item.status == 'timeout' for item in result.metadata.checks.values()))
+        latest_progress = {check: (status, duration_ms) for check, status, duration_ms in progress}
+        self.assertEqual(set(latest_progress), set(ANALYSIS_CHECKS))
+        self.assertTrue(all(status == 'failed' for status, _duration_ms in latest_progress.values()))
+        self.assertTrue(all(duration_ms is not None for _status, duration_ms in latest_progress.values()))
 
     async def test_global_deadline_rejects_target_validation_timeout(self) -> None:
         dependencies = DomainDependencies(network_guard=SlowGuard)

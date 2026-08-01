@@ -86,7 +86,7 @@ describe('security summary', () => {
     const result = getSecuritySummary(
       analysis({
         http: {
-          http: probe({ reachable: true, final_url: 'http://example.com' }),
+          http: probe({ reachable: true }),
           https: probe({ reachable: true }),
         },
         ssl: {

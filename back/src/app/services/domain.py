@@ -202,15 +202,24 @@ async def _load_rdap_context(
     errors: list[AnalysisError],
     dependencies: DomainDependencies,
     deadline: float,
+    analysis_id: str | None,
+    task_id: str | None,
     progress_callback: ProgressCallback | None,
     observations: dict[str, _CheckObservation],
 ) -> tuple[list[str], str]:
     started_at = perf_counter()
     remaining = deadline - asyncio.get_running_loop().time()
     if remaining <= 0:
-        _record_observation(observations, 'rdap', started_at, 'timeout')
         errors.append(_analysis_error('rdap', timed_out=True))
-        await _report_progress(progress_callback, 'rdap', 'failed')
+        await _record_rdap_context_failure(
+            domain,
+            analysis_id=analysis_id,
+            task_id=task_id,
+            progress_callback=progress_callback,
+            observations=observations,
+            started_at=started_at,
+            timed_out=True,
+        )
         return [], domain
 
     try:
@@ -219,29 +228,73 @@ async def _load_rdap_context(
         if servers:
             return servers, rdap_domain
     except asyncio.TimeoutError:
-        _record_observation(observations, 'rdap', started_at, 'timeout')
         errors.append(_analysis_error('rdap', timed_out=True))
-        await _report_progress(progress_callback, 'rdap', 'failed')
+        await _record_rdap_context_failure(
+            domain,
+            analysis_id=analysis_id,
+            task_id=task_id,
+            progress_callback=progress_callback,
+            observations=observations,
+            started_at=started_at,
+            timed_out=True,
+        )
         return [], domain
     except asyncio.CancelledError:
         raise
     except Exception:
         pass
 
-    _record_observation(observations, 'rdap', started_at, 'failed')
     errors.append(_analysis_error('rdap'))
-    await _report_progress(progress_callback, 'rdap', 'failed')
+    await _record_rdap_context_failure(
+        domain,
+        analysis_id=analysis_id,
+        task_id=task_id,
+        progress_callback=progress_callback,
+        observations=observations,
+        started_at=started_at,
+        timed_out=False,
+    )
     return [], domain
+
+
+async def _record_rdap_context_failure(
+    domain: str,
+    analysis_id: str | None,
+    task_id: str | None,
+    progress_callback: ProgressCallback | None,
+    observations: dict[str, _CheckObservation],
+    started_at: float,
+    timed_out: bool,
+) -> None:
+    status: CheckObservationStatus = 'timeout' if timed_out else 'failed'
+    metric_status = 'timeout' if timed_out else 'failed'
+    _record_observation(observations, 'rdap', started_at, status)
+    duration_seconds = perf_counter() - started_at
+    duration_ms = round(duration_seconds * 1000, 2)
+    record_analysis_check('rdap', metric_status, duration_seconds)
+    logger.info(
+        'domain analysis check completed',
+        extra={
+            'domain': domain,
+            'check': 'rdap',
+            'analysis_id': analysis_id,
+            'task_id': task_id,
+            'check_status': metric_status,
+            'check_duration_ms': duration_ms,
+        },
+    )
+    await _report_progress(progress_callback, 'rdap', 'failed', duration_ms)
 
 
 async def _run_check(
     check: str,
     domain: str,
-    operation: Awaitable[Any],
+    operation: Callable[[], Awaitable[Any]],
     analysis_id: str | None,
     task_id: str | None,
     progress_callback: ProgressCallback | None,
     observations: dict[str, _CheckObservation],
+    deadline_expired: asyncio.Event,
 ) -> Any:
     started_at = perf_counter()
     progress_status = 'successful'
@@ -249,7 +302,7 @@ async def _run_check(
     observation_status: CheckObservationStatus = 'successful'
     await _report_progress(progress_callback, check, 'running')
     try:
-        return await operation
+        return await operation()
     except asyncio.TimeoutError:
         progress_status = 'failed'
         metric_status = 'timeout'
@@ -257,8 +310,12 @@ async def _run_check(
         raise
     except asyncio.CancelledError:
         progress_status = 'failed'
-        metric_status = 'cancelled'
-        observation_status = 'cancelled'
+        if deadline_expired.is_set():
+            metric_status = 'timeout'
+            observation_status = 'timeout'
+        else:
+            metric_status = 'cancelled'
+            observation_status = 'cancelled'
         raise
     except Exception:
         progress_status = 'failed'
@@ -283,6 +340,56 @@ async def _run_check(
         await _report_progress(progress_callback, check, progress_status, round(duration_seconds * 1000, 2))
 
 
+async def _record_unstarted_timeout(
+    check: str,
+    domain: str,
+    analysis_id: str | None,
+    task_id: str | None,
+    progress_callback: ProgressCallback | None,
+    observations: dict[str, _CheckObservation],
+) -> None:
+    started_at = perf_counter()
+    _record_observation(observations, check, started_at, 'timeout')
+    duration_seconds = perf_counter() - started_at
+    duration_ms = round(duration_seconds * 1000, 2)
+    record_analysis_check(check, 'timeout', duration_seconds)
+    logger.info(
+        'domain analysis check completed',
+        extra={
+            'domain': domain,
+            'check': check,
+            'analysis_id': analysis_id,
+            'task_id': task_id,
+            'check_status': 'timeout',
+            'check_duration_ms': duration_ms,
+        },
+    )
+    await _report_progress(progress_callback, check, 'failed', duration_ms)
+
+
+async def _wait_for_tasks(
+    tasks: dict[str, asyncio.Task[Any]],
+    deadline: float,
+    deadline_expired: asyncio.Event,
+) -> set[asyncio.Task[Any]]:
+    done: set[asyncio.Task[Any]] = set()
+    pending: set[asyncio.Task[Any]] = set()
+    try:
+        remaining = max(0, deadline - asyncio.get_running_loop().time())
+        done, pending = await asyncio.wait(tasks.values(), timeout=remaining)
+        if pending:
+            deadline_expired.set()
+        return done
+    except asyncio.CancelledError:
+        pending = set(tasks.values())
+        raise
+    finally:
+        if pending:
+            for task in pending:
+                task.cancel()
+            await asyncio.gather(*pending, return_exceptions=True)
+
+
 async def _collect_results(
     domain: str,
     target_ips: list[str],
@@ -295,35 +402,45 @@ async def _collect_results(
     progress_callback: ProgressCallback | None,
     observations: dict[str, _CheckObservation],
 ) -> dict[str, object]:
-    operations: dict[str, Awaitable[Any]] = {
-        'dns': dependencies.dns_resolver.resolve(domain=domain),
-        'dns_propagation': dependencies.dns_propagation.check(domain=domain),
-        'http': dependencies.http_service.probe(domain=domain, target_ips=target_ips),
-        'ssl': dependencies.ssl_service.check(domain=domain, target_ips=target_ips),
-        'ports': dependencies.port_scanner.scan(host=domain, target_ips=target_ips),
-        'latency': dependencies.latency_service.measure(host=domain, target_ips=target_ips),
+    operations: dict[str, Callable[[], Awaitable[Any]]] = {
+        'dns': lambda: dependencies.dns_resolver.resolve(domain=domain),
+        'dns_propagation': lambda: dependencies.dns_propagation.check(domain=domain),
+        'http': lambda: dependencies.http_service.probe(domain=domain, target_ips=target_ips),
+        'ssl': lambda: dependencies.ssl_service.check(domain=domain, target_ips=target_ips),
+        'ports': lambda: dependencies.port_scanner.scan(host=domain, target_ips=target_ips),
+        'latency': lambda: dependencies.latency_service.measure(host=domain, target_ips=target_ips),
     }
     if servers:
-        operations['rdap'] = dependencies.rdap_client.query(domain=rdap_domain, servers=servers)
+        operations['rdap'] = lambda: dependencies.rdap_client.query(domain=rdap_domain, servers=servers)
 
+    deadline_expired = asyncio.Event()
     tasks = {
         check: asyncio.create_task(
-            _run_check(check, domain, operation, analysis_id, task_id, progress_callback, observations)
+            _run_check(
+                check,
+                domain,
+                operation,
+                analysis_id,
+                task_id,
+                progress_callback,
+                observations,
+                deadline_expired,
+            )
         )
         for check, operation in operations.items()
     }
-    pending: set[asyncio.Task[Any]] = set()
-    try:
-        remaining = max(0, deadline - asyncio.get_running_loop().time())
-        done, pending = await asyncio.wait(tasks.values(), timeout=remaining)
-    except asyncio.CancelledError:
-        pending = set(tasks.values())
-        raise
-    finally:
-        if pending:
-            for task in pending:
-                task.cancel()
-            await asyncio.gather(*pending, return_exceptions=True)
+    done = await _wait_for_tasks(tasks, deadline, deadline_expired)
+
+    for check, task in tasks.items():
+        if task not in done and check not in observations:
+            await _record_unstarted_timeout(
+                check,
+                domain,
+                analysis_id,
+                task_id,
+                progress_callback,
+                observations,
+            )
 
     results: dict[str, object] = {}
     for check, task in tasks.items():
@@ -372,6 +489,7 @@ async def _lookup_geoip(
         _record_observation(observations, 'geoip', started_at, 'timeout')
         errors.append(_analysis_error('geoip', timed_out=True))
         duration_seconds = perf_counter() - started_at
+        duration_ms = round(duration_seconds * 1000, 2)
         record_analysis_check('geoip', 'timeout', duration_seconds)
         logger.info(
             'domain analysis check completed',
@@ -381,10 +499,10 @@ async def _lookup_geoip(
                 'analysis_id': analysis_id,
                 'task_id': task_id,
                 'check_status': 'timeout',
-                'check_duration_ms': round(duration_seconds * 1000, 2),
+                'check_duration_ms': duration_ms,
             },
         )
-        await _report_progress(progress_callback, 'geoip', 'failed')
+        await _report_progress(progress_callback, 'geoip', 'failed', duration_ms)
         return {}
 
     progress_status = 'successful'
@@ -504,6 +622,8 @@ class DomainService:
             errors,
             self.dependencies,
             deadline,
+            analysis_id,
+            task_id,
             progress_callback,
             observations,
         )

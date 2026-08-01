@@ -33,7 +33,11 @@ class ProviderContractTests(unittest.IsolatedAsyncioTestCase):
 
         client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
         with (
-            patch.object(rdap_client.NetworkTargetGuard, 'validate', new=AsyncMock()),
+            patch.object(
+                rdap_client.NetworkTargetGuard,
+                'resolve_public_ips',
+                new=AsyncMock(return_value=['203.0.113.11']),
+            ),
             patch.object(rdap_client.settings, 'RDAP_MAX_RETRIES', 1),
             patch.object(rdap_client.settings, 'RETRY_BACKOFF_SECONDS', 0),
             patch.object(rdap_client.settings, 'RETRY_JITTER_SECONDS', 0),
@@ -44,6 +48,9 @@ class ProviderContractTests(unittest.IsolatedAsyncioTestCase):
         self.assertIsNotNone(result)
         self.assertEqual(result.status, ['active'])
         self.assertEqual(len(requests), 2)
+        self.assertEqual(requests[0].url.host, '203.0.113.11')
+        self.assertEqual(requests[0].headers['host'], 'rdap.example.test')
+        self.assertEqual(requests[0].extensions['sni_hostname'], 'rdap.example.test')
 
     async def test_rdap_ignores_malformed_json_without_retrying(self) -> None:
         requests: list[httpx.Request] = []
@@ -54,7 +61,11 @@ class ProviderContractTests(unittest.IsolatedAsyncioTestCase):
 
         client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
         with (
-            patch.object(rdap_client.NetworkTargetGuard, 'validate', new=AsyncMock()),
+            patch.object(
+                rdap_client.NetworkTargetGuard,
+                'resolve_public_ips',
+                new=AsyncMock(return_value=['203.0.113.11']),
+            ),
             patch.object(rdap_client.settings, 'RDAP_MAX_RETRIES', 1),
         ):
             result = await RDAPClient._query_server(client, 'example.com', 'https://rdap.example.test')
