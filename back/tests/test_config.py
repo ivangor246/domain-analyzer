@@ -23,6 +23,11 @@ class SettingsTestCase(unittest.TestCase):
         self.assertEqual(settings.RETRY_MAX_DELAY_SECONDS, 30)
         self.assertEqual(settings.CIRCUIT_BREAKER_FAILURE_THRESHOLD, 3)
         self.assertEqual(settings.CIRCUIT_BREAKER_RESET_SECONDS, 30)
+        self.assertTrue(settings.PROVIDER_CACHE_ENABLED)
+        self.assertEqual(settings.PROVIDER_CACHE_MAX_ENTRIES, 1024)
+        self.assertEqual(settings.RDAP_CACHE_TTL_SECONDS, 900)
+        self.assertEqual(settings.GEOIP_CACHE_TTL_SECONDS, 3600)
+        self.assertEqual(settings.RDAP_BOOTSTRAP_CACHE_TTL_SECONDS, 3600)
         self.assertTrue(settings.RATE_LIMIT_REDIS_ENABLED)
         self.assertTrue(settings.RATE_LIMIT_REDIS_FALLBACK_ENABLED)
 

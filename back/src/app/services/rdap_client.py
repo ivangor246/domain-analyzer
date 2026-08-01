@@ -1,4 +1,3 @@
-import json
 from datetime import datetime
 from urllib.parse import urlparse
 
@@ -15,6 +14,7 @@ from app.utils.http import (
     run_with_retries,
 )
 from app.utils.circuit_breaker import CircuitOpenError, CircuitBreaker
+from app.utils.ttl_cache import AsyncTTLCache
 
 from .network_guard import NetworkTargetGuard
 
@@ -31,70 +31,82 @@ class RDAPResponse(BaseModel):
 
 
 rdap_breaker = CircuitBreaker()
+rdap_cache = AsyncTTLCache[tuple[str, tuple[str, ...]], RDAPResponse](max_entries=settings.PROVIDER_CACHE_MAX_ENTRIES)
 
 
 class RDAPClient:
     @staticmethod
     async def query(domain: str, servers: list[str]) -> RDAPResponse:
+        cache_key = (domain.lower().rstrip('.'), tuple(server.strip() for server in servers))
+        if settings.PROVIDER_CACHE_ENABLED and settings.RDAP_CACHE_TTL_SECONDS > 0:
+            cached = await rdap_cache.get(cache_key)
+            if cached is not None:
+                return cached.model_copy(deep=True)
+
         async with httpx.AsyncClient(
             timeout=settings.RDAP_TIMEOUT_SECONDS,
             follow_redirects=False,
             trust_env=False,
         ) as client:
             for server in servers:
-                try:
-                    parsed_server = urlparse(server.strip())
-                    parsed_server.port
-                except ValueError:
+                result = await RDAPClient._query_server(client, domain, server)
+                if result is None:
                     continue
-                if (
-                    parsed_server.scheme not in {'http', 'https'}
-                    or not parsed_server.hostname
-                    or parsed_server.username
-                    or parsed_server.password
-                    or parsed_server.query
-                    or parsed_server.fragment
-                ):
-                    continue
-                try:
-                    await NetworkTargetGuard.validate(parsed_server.hostname)
-                except Exception:
-                    continue
-
-                url = f'{parsed_server.geturl().rstrip("/")}/domain/{domain}'
-                provider_key = f'rdap:{parsed_server.geturl().rstrip("/")}'
-                try:
-
-                    async def fetch() -> object:
-                        async with client.stream('GET', url) as response:
-                            response.raise_for_status()
-                            content = await read_limited_response(response, settings.HTTP_MAX_RESPONSE_BYTES)
-                        return parse_json(content)
-
-                    data = await rdap_breaker.call(
-                        provider_key,
-                        lambda: run_with_retries(
-                            fetch,
-                            retries=settings.RDAP_MAX_RETRIES,
-                            should_retry=is_retryable_http_error,
-                            backoff_seconds=settings.RETRY_BACKOFF_SECONDS,
-                            jitter_seconds=settings.RETRY_JITTER_SECONDS,
-                            retry_after=retry_after_seconds,
-                            max_delay_seconds=settings.RETRY_MAX_DELAY_SECONDS,
-                        ),
-                        should_trip=is_retryable_http_error,
-                    )
-                    if not isinstance(data, dict):
-                        continue
-                    return RDAPClient._parse(server=server, data=data)
-                except CircuitOpenError:
-                    continue
-                except httpx.HTTPError:
-                    continue
-                except (json.JSONDecodeError, ValueError):
-                    continue
+                if settings.PROVIDER_CACHE_ENABLED and settings.RDAP_CACHE_TTL_SECONDS > 0:
+                    await rdap_cache.set(cache_key, result.model_copy(deep=True), settings.RDAP_CACHE_TTL_SECONDS)
+                return result
 
         raise RDAPError(f'All RDAP servers failed for domain: {domain}')
+
+    @staticmethod
+    async def _query_server(client: httpx.AsyncClient, domain: str, server: str) -> RDAPResponse | None:
+        try:
+            parsed_server = urlparse(server.strip())
+            parsed_server.port
+        except ValueError:
+            return None
+        if (
+            parsed_server.scheme not in {'http', 'https'}
+            or not parsed_server.hostname
+            or parsed_server.username
+            or parsed_server.password
+            or parsed_server.query
+            or parsed_server.fragment
+        ):
+            return None
+        try:
+            await NetworkTargetGuard.validate(parsed_server.hostname)
+        except Exception:
+            return None
+
+        url = f'{parsed_server.geturl().rstrip("/")}/domain/{domain}'
+        provider_key = f'rdap:{parsed_server.geturl().rstrip("/")}'
+        try:
+
+            async def fetch() -> object:
+                async with client.stream('GET', url) as response:
+                    response.raise_for_status()
+                    content = await read_limited_response(response, settings.HTTP_MAX_RESPONSE_BYTES)
+                return parse_json(content)
+
+            data = await rdap_breaker.call(
+                provider_key,
+                lambda: run_with_retries(
+                    fetch,
+                    retries=settings.RDAP_MAX_RETRIES,
+                    should_retry=is_retryable_http_error,
+                    backoff_seconds=settings.RETRY_BACKOFF_SECONDS,
+                    jitter_seconds=settings.RETRY_JITTER_SECONDS,
+                    retry_after=retry_after_seconds,
+                    max_delay_seconds=settings.RETRY_MAX_DELAY_SECONDS,
+                ),
+                should_trip=is_retryable_http_error,
+            )
+            if not isinstance(data, dict):
+                return None
+            return RDAPClient._parse(server=server, data=data)
+        except (CircuitOpenError, httpx.HTTPError, ValueError):
+            return None
 
     @staticmethod
     def _parse(server: str, data: dict) -> RDAPResponse:

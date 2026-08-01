@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import time
 from typing import ClassVar
 
 import httpx
@@ -25,24 +26,39 @@ class RDAPBootstrap:
     _instance: ClassVar[RDAPBootstrap] | None = None
     _load_lock: ClassVar[asyncio.Lock | None] = None
     _breaker: ClassVar[CircuitBreaker] = CircuitBreaker()
+    _loaded_at: ClassVar[float | None] = None
+    _loaded_source: ClassVar[str | None] = None
 
     def __init__(self) -> None:
         self.data: dict[str, list[str]] = {}
 
     @classmethod
     async def get_instance(cls) -> RDAPBootstrap:
-        if cls._instance is not None:
+        if cls._is_cache_valid():
             return cls._instance
 
         if cls._load_lock is None:
             cls._load_lock = asyncio.Lock()
 
         async with cls._load_lock:
-            if cls._instance is None:
+            if not cls._is_cache_valid():
                 instance = cls()
                 await instance.load()
                 cls._instance = instance
+                cls._loaded_at = time.monotonic()
+                cls._loaded_source = settings.BOOTSTRAP_URL
         return cls._instance
+
+    @classmethod
+    def _is_cache_valid(cls) -> bool:
+        if not settings.PROVIDER_CACHE_ENABLED or settings.RDAP_BOOTSTRAP_CACHE_TTL_SECONDS <= 0:
+            return False
+        return (
+            cls._instance is not None
+            and cls._loaded_at is not None
+            and cls._loaded_source == settings.BOOTSTRAP_URL
+            and time.monotonic() - cls._loaded_at < settings.RDAP_BOOTSTRAP_CACHE_TTL_SECONDS
+        )
 
     async def load(self) -> None:
         async with httpx.AsyncClient(timeout=settings.BOOTSTRAP_TIMEOUT_SECONDS, trust_env=False) as client:
