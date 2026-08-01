@@ -65,3 +65,17 @@ class ApiTestCase(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(second_response.headers['X-RateLimit-Limit'], '1')
         self.assertEqual(second_response.headers['X-RateLimit-Remaining'], '0')
         self.assertEqual(second_response.headers['Retry-After'], '60')
+
+    def test_openapi_describes_domain_contract(self) -> None:
+        schema = create_app().openapi()
+        operation = schema['paths']['/api/domain']['get']
+
+        self.assertEqual(operation['summary'], 'Analyze a domain')
+        self.assertEqual(
+            operation['responses']['200']['description'], 'Structured domain analysis with optional partial results.'
+        )
+        self.assertIn('400', operation['responses'])
+        self.assertIn('422', operation['responses'])
+        self.assertIn('429', operation['responses'])
+        self.assertEqual(operation['parameters'][0]['name'], 'd')
+        self.assertEqual(operation['parameters'][0]['schema']['maxLength'], settings.MAX_DOMAIN_LENGTH)

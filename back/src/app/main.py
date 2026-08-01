@@ -35,6 +35,10 @@ def create_app() -> FastAPI:
 
     app = FastAPI(
         title=settings.TITLE,
+        version='0.1.0',
+        description=(
+            'Asynchronous domain analysis API. Results may be partial when an external provider is unavailable.'
+        ),
         docs_url=settings.DOCS_URL,
         openapi_url=settings.OPENAPI_URL,
         redoc_url=settings.REDOC_URL,

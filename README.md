@@ -130,6 +130,8 @@ curl 'http://localhost:8000/api/domain?d=example.com'
 
 Invalid domains return HTTP 400. An unsuccessful RDAP lookup returns HTTP 502.
 
+The initial API is intentionally synchronous: `GET /api/domain` completes the available checks in one request and returns partial results when individual providers fail. A background job endpoint will be introduced only if the analysis duration or workload requires it.
+
 When `DOCS=True`, interactive API documentation is available at:
 
 - `http://localhost:8000/api/docs` — Swagger UI;
