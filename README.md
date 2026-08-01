@@ -140,6 +140,8 @@ poetry run ruff check src
 poetry run ruff format --check src
 ```
 
+From the repository root, the same checks are available through `make check`. Use `make coverage` to generate a local coverage report.
+
 The backend test suite uses Python's standard `unittest` runner and avoids network-dependent checks by replacing external services with test doubles.
 
 ## Frontend

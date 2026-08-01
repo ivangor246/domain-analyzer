@@ -18,3 +18,17 @@ logs:
 
 clear:
 	docker compose -f $(BACKEND_COMPOSE) down -v --rmi all --remove-orphans $(for)
+
+test:
+	cd back && PYTHONPATH=src poetry run python -m unittest discover -s tests
+
+coverage:
+	cd back && PYTHONPATH=src poetry run coverage run -m unittest discover -s tests && poetry run coverage report --fail-under=65
+
+lint:
+	cd back && poetry run ruff check src tests
+
+format-check:
+	cd back && poetry run ruff format --check src tests
+
+check: test lint format-check

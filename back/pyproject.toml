@@ -30,6 +30,7 @@ cryptography = "^44.0.0"
 
 [tool.poetry.group.dev.dependencies]
 ruff = "^0.15.0"
+coverage = "^7.9.1"
 
 [tool.ruff]
 line-length = 120

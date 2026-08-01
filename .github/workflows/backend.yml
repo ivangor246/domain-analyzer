@@ -1,0 +1,45 @@
+name: Backend
+
+on:
+  push:
+    paths:
+      - 'back/**'
+      - 'Makefile'
+      - '.github/workflows/backend.yml'
+  pull_request:
+    paths:
+      - 'back/**'
+      - 'Makefile'
+      - '.github/workflows/backend.yml'
+
+jobs:
+  quality:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+
+      - name: Install Poetry
+        run: pip install poetry==2.1.3
+
+      - name: Install backend dependencies
+        working-directory: back
+        run: poetry install --no-interaction
+
+      - name: Run tests with coverage
+        working-directory: back
+        run: PYTHONPATH=src poetry run coverage run -m unittest discover -s tests && poetry run coverage report --fail-under=65
+
+      - name: Check lint
+        working-directory: back
+        run: poetry run ruff check src tests
+
+      - name: Check formatting
+        working-directory: back
+        run: poetry run ruff format --check src tests
