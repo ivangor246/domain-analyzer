@@ -1,13 +1,19 @@
 import { useRef, useState, type ChangeEvent, type FormEvent } from 'react'
 
 import { ApiError, cancelAnalysis, createAnalysis, pollAnalysis } from './api/client'
-import type { AnalysisJob, AnalysisJobStatus, DomainAnalysis } from './api/types'
+import type { AnalysisJob, AnalysisJobStatus, AnalysisProgress as AnalysisProgressItem, DomainAnalysis } from './api/types'
 import AnalysisForm from './components/AnalysisForm'
+import AnalysisProgress from './components/AnalysisProgress'
 import AnalysisResults from './components/AnalysisResults'
 
 type ViewState =
   | { status: 'idle' }
-  | { status: 'loading'; phase: Extract<AnalysisJobStatus, 'queued' | 'running'>; jobId: string | null }
+  | {
+      status: 'loading'
+      phase: Extract<AnalysisJobStatus, 'queued' | 'running'>
+      jobId: string | null
+      progress: AnalysisProgressItem[]
+    }
   | { status: 'success'; analysis: DomainAnalysis }
   | { status: 'error'; error: Error }
 
@@ -60,7 +66,7 @@ function App() {
 
     const controller = new AbortController()
     controllerRef.current = controller
-    setView({ status: 'loading', phase: 'queued', jobId: null })
+    setView({ status: 'loading', phase: 'queued', jobId: null, progress: [] })
 
     try {
       const initialJob = await createAnalysis(target)
@@ -71,7 +77,12 @@ function App() {
 
       jobIdRef.current = initialJob.id
       if (isActiveJob(initialJob)) {
-        setView({ status: 'loading', phase: initialJob.status, jobId: initialJob.id })
+        setView({
+          status: 'loading',
+          phase: initialJob.status,
+          jobId: initialJob.id,
+          progress: initialJob.progress,
+        })
       }
 
       const finalJob = await pollAnalysis(
@@ -81,7 +92,12 @@ function App() {
           if (runTokenRef.current !== runToken || !isActiveJob(job)) {
             return
           }
-          setView({ status: 'loading', phase: job.status, jobId: job.id })
+          setView({
+            status: 'loading',
+            phase: job.status,
+            jobId: job.id,
+            progress: job.progress,
+          })
         },
       )
 
@@ -169,6 +185,8 @@ function App() {
             {statusMessage(view)}
           </p>
         </section>
+
+        {view.status === 'loading' && <AnalysisProgress progress={view.progress} />}
 
         {view.status === 'error' && (
           <section className="error-panel" role="alert">

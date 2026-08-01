@@ -175,6 +175,117 @@ summary:focus-visible {
   color: #aab5ca;
 }
 
+.progress-panel {
+  width: min(100%, 54rem);
+  margin: 0 auto 2rem;
+  border: 1px solid rgba(177, 195, 232, 0.14);
+  border-radius: 1.25rem;
+  padding: 1.25rem 1.5rem;
+  background: rgba(18, 27, 51, 0.84);
+  box-shadow: 0 1.25rem 3rem rgba(0, 0, 0, 0.16);
+}
+
+.progress-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.progress-heading .eyebrow {
+  margin-bottom: 0.45rem;
+}
+
+.progress-heading h2 {
+  margin: 0;
+  color: #f2f5fc;
+  font-size: 1.2rem;
+}
+
+.progress-summary {
+  margin: 0;
+  color: #83d7c6;
+  font-size: 0.82rem;
+  font-weight: 700;
+  text-align: right;
+}
+
+.progress-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.6rem;
+  margin: 1rem 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.progress-item {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 0.6rem;
+  min-width: 0;
+  border: 1px solid rgba(177, 195, 232, 0.1);
+  border-radius: 0.75rem;
+  padding: 0.65rem 0.75rem;
+  background: rgba(9, 16, 34, 0.42);
+}
+
+.progress-check {
+  overflow: hidden;
+  color: #e8edf7;
+  font-size: 0.84rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.progress-status {
+  border-radius: 999px;
+  padding: 0.22rem 0.45rem;
+  font-size: 0.68rem;
+  font-weight: 800;
+  text-transform: capitalize;
+  white-space: nowrap;
+}
+
+.progress-status-queued {
+  color: #aab5ca;
+  background: rgba(170, 181, 202, 0.13);
+}
+
+.progress-status-running {
+  color: #a8b8ff;
+  background: rgba(131, 151, 255, 0.14);
+}
+
+.progress-status-successful {
+  color: #83d7c6;
+  background: rgba(131, 215, 198, 0.13);
+}
+
+.progress-status-partial {
+  color: #ffc28c;
+  background: rgba(255, 194, 140, 0.13);
+}
+
+.progress-status-failed {
+  color: #ffad9d;
+  background: rgba(255, 123, 105, 0.13);
+}
+
+.progress-duration {
+  min-width: 3.5rem;
+  color: #6f7e9f;
+  font-size: 0.75rem;
+  text-align: right;
+}
+
+.progress-empty {
+  margin: 1rem 0 0;
+  color: #8997b6;
+  font-size: 0.84rem;
+}
+
 .error-panel,
 .warning-panel {
   display: flex;
@@ -748,6 +859,10 @@ summary {
     justify-content: flex-start;
   }
 
+  .progress-heading {
+    flex-direction: column;
+  }
+
   .security-summary-heading {
     flex-direction: column;
   }
@@ -760,6 +875,10 @@ summary {
   .record-groups,
   .detail-grid,
   .compact-fields {
+    grid-template-columns: 1fr;
+  }
+
+  .progress-list {
     grid-template-columns: 1fr;
   }
 
