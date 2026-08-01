@@ -1,5 +1,6 @@
 import asyncio
 import logging
+from dataclasses import dataclass
 from typing import Any, Awaitable, TypeVar
 
 from app.core.exceptions import DomainValidationError
@@ -38,6 +39,19 @@ _ANALYSIS_FAILURES: dict[str, tuple[str, str]] = {
 }
 
 
+@dataclass(frozen=True)
+class DomainDependencies:
+    rdap_bootstrap: type[RDAPBootstrap] = RDAPBootstrap
+    rdap_client: type[RDAPClient] = RDAPClient
+    dns_resolver: type[DNSResolver] = DNSResolver
+    dns_propagation: type[DNSPropagation] = DNSPropagation
+    geoip_service: type[GeoIPService] = GeoIPService
+    http_service: type[HTTPHeadersService] = HTTPHeadersService
+    ssl_service: type[SSLCertService] = SSLCertService
+    port_scanner: type[PortScanner] = PortScanner
+    latency_service: type[LatencyService] = LatencyService
+
+
 def _analysis_error(check: str) -> AnalysisError:
     code, message = _ANALYSIS_FAILURES[check]
     logger.warning('domain analysis check failed', extra={'check': check})
@@ -60,9 +74,13 @@ def _result_or_default(
     return result
 
 
-async def _load_rdap_context(domain: str, errors: list[AnalysisError]) -> tuple[list[str], str]:
+async def _load_rdap_context(
+    domain: str,
+    errors: list[AnalysisError],
+    dependencies: DomainDependencies,
+) -> tuple[list[str], str]:
     try:
-        bootstrap = await RDAPBootstrap.get_instance()
+        bootstrap = await dependencies.rdap_bootstrap.get_instance()
         servers, rdap_domain = bootstrap.get_servers(domain=domain)
         if servers:
             return servers, rdap_domain
@@ -75,17 +93,22 @@ async def _load_rdap_context(domain: str, errors: list[AnalysisError]) -> tuple[
     return [], domain
 
 
-async def _collect_results(domain: str, servers: list[str], rdap_domain: str) -> dict[str, object]:
+async def _collect_results(
+    domain: str,
+    servers: list[str],
+    rdap_domain: str,
+    dependencies: DomainDependencies,
+) -> dict[str, object]:
     tasks: dict[str, Awaitable[Any]] = {
-        'dns': DNSResolver.resolve(domain=domain),
-        'dns_propagation': DNSPropagation.check(domain=domain),
-        'http': HTTPHeadersService.probe(domain=domain),
-        'ssl': SSLCertService.check(domain=domain),
-        'ports': PortScanner.scan(host=domain),
-        'latency': LatencyService.measure(host=domain),
+        'dns': dependencies.dns_resolver.resolve(domain=domain),
+        'dns_propagation': dependencies.dns_propagation.check(domain=domain),
+        'http': dependencies.http_service.probe(domain=domain),
+        'ssl': dependencies.ssl_service.check(domain=domain),
+        'ports': dependencies.port_scanner.scan(host=domain),
+        'latency': dependencies.latency_service.measure(host=domain),
     }
     if servers:
-        tasks['rdap'] = RDAPClient.query(domain=rdap_domain, servers=servers)
+        tasks['rdap'] = dependencies.rdap_client.query(domain=rdap_domain, servers=servers)
 
     return dict(zip(tasks, await asyncio.gather(*tasks.values(), return_exceptions=True)))
 
@@ -103,9 +126,13 @@ def _get_rdap_result(results: dict[str, object], errors: list[AnalysisError]) ->
     return None
 
 
-async def _lookup_geoip(ips: list[str], errors: list[AnalysisError]) -> dict[str, GeoIPRecord]:
+async def _lookup_geoip(
+    ips: list[str],
+    errors: list[AnalysisError],
+    dependencies: DomainDependencies,
+) -> dict[str, GeoIPRecord]:
     try:
-        return await GeoIPService.lookup(ips=ips)
+        return await dependencies.geoip_service.lookup(ips=ips)
     except asyncio.CancelledError:
         raise
     except Exception:
@@ -114,6 +141,9 @@ async def _lookup_geoip(ips: list[str], errors: list[AnalysisError]) -> dict[str
 
 
 class DomainService:
+    def __init__(self, dependencies: DomainDependencies | None = None):
+        self.dependencies = dependencies or DomainDependencies()
+
     async def analyze(self, domain: str) -> DomainSchema:
         try:
             domain = validate_domain(domain=domain)
@@ -122,8 +152,8 @@ class DomainService:
 
         logger.info('domain analysis started', extra={'domain': domain})
         errors: list[AnalysisError] = []
-        servers, rdap_domain = await _load_rdap_context(domain, errors)
-        raw_results = await _collect_results(domain, servers, rdap_domain)
+        servers, rdap_domain = await _load_rdap_context(domain, errors, self.dependencies)
+        raw_results = await _collect_results(domain, servers, rdap_domain, self.dependencies)
 
         rdap_result = _get_rdap_result(raw_results, errors)
         dns_result = _result_or_default(raw_results, 'dns', DNSRecords, DNSRecords(), errors)
@@ -134,7 +164,7 @@ class DomainService:
         latency_result = _result_or_default(raw_results, 'latency', LatencySchema, None, errors)
 
         all_ips = dns_result.A + dns_result.AAAA
-        geoip_result = await _lookup_geoip(ips=all_ips, errors=errors)
+        geoip_result = await _lookup_geoip(ips=all_ips, errors=errors, dependencies=self.dependencies)
 
         dns_schema = DNSSchema(
             A=dns_result.A,
