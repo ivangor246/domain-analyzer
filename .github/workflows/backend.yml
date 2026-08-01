@@ -34,7 +34,7 @@ jobs:
 
       - name: Run tests with coverage
         working-directory: back
-        run: PYTHONPATH=src poetry run coverage run -m unittest discover -s tests && poetry run coverage report --fail-under=65
+        run: PYTHONPATH=src poetry run coverage run -m unittest discover -s tests && poetry run coverage report --fail-under=80
 
       - name: Check lint
         working-directory: back

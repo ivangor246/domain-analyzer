@@ -23,7 +23,7 @@ test:
 	cd back && PYTHONPATH=src poetry run python -m unittest discover -s tests
 
 coverage:
-	cd back && PYTHONPATH=src poetry run coverage run -m unittest discover -s tests && poetry run coverage report --fail-under=65
+	cd back && PYTHONPATH=src poetry run coverage run -m unittest discover -s tests && poetry run coverage report --fail-under=80
 
 lint:
 	cd back && poetry run ruff check src tests

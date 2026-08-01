@@ -47,7 +47,7 @@ class RDAPBootstrap:
         multi-label TLDs such as co.uk or com.br.
         """
         labels = domain.split('.')
-        for n in range(len(labels) - 1, 0, -1):
+        for n in range(1, len(labels)):
             tld = '.'.join(labels[n:]).lower()
             if tld in self.data:
                 rdap_domain = '.'.join(labels[n - 1 :])
