@@ -48,6 +48,8 @@ describe('report export', () => {
     expect(result).toContain('| Exported at | 2026-08-01T12:00:00.000Z |')
     expect(result).toContain('| rdap | rdap_unavailable | Provider unavailable |')
     expect(result).toContain('v=spf1 \\| test')
+    expect(result).toContain('## Security signals')
+    expect(result).toContain('HTTP security signals could not be assessed')
   })
 
   it('creates safe filenames for domains', () => {

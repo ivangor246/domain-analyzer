@@ -1,4 +1,5 @@
 import type { DomainAnalysis, HTTPProbeResult, LatencyResult } from '../api/types'
+import { getSecuritySummary } from './security'
 
 function markdownCell(value: unknown): string {
   if (value === null || value === undefined || value === '') {
@@ -60,6 +61,7 @@ export function formatAnalysisJson(analysis: DomainAnalysis): string {
 }
 
 export function formatAnalysisMarkdown(analysis: DomainAnalysis, exportedAt = new Date()): string {
+  const securitySummary = getSecuritySummary(analysis)
   const lines = [
     '# Domain Analyzer report',
     '',
@@ -85,6 +87,29 @@ export function formatAnalysisMarkdown(analysis: DomainAnalysis, exportedAt = ne
     lines.push('| Check | Code | Message |', '| --- | --- | --- |')
     for (const error of analysis.analysis_errors) {
       lines.push(`| ${markdownCell(error.check)} | ${markdownCell(error.code)} | ${markdownCell(error.message)} |`)
+    }
+    lines.push('')
+  }
+
+  lines.push(
+    '## Security signals',
+    '',
+    'This is a heuristic signal check, not a complete security audit.',
+    '',
+    '| Field | Value |',
+    '| --- | --- |',
+    tableRow('Score', securitySummary.score === null ? 'Not assessed' : `${securitySummary.score}/100`),
+    tableRow('Assessed signals', securitySummary.assessedSignals),
+    '',
+  )
+  if (securitySummary.findings.length === 0) {
+    lines.push('No actionable signals were found in the collected responses.', '')
+  } else {
+    lines.push('| Severity | Signal | Recommendation |', '| --- | --- | --- |')
+    for (const finding of securitySummary.findings) {
+      lines.push(
+        `| ${markdownCell(finding.severity)} | ${markdownCell(finding.title)} | ${markdownCell(finding.recommendation)} |`,
+      )
     }
     lines.push('')
   }

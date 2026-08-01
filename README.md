@@ -221,6 +221,8 @@ The frontend validates successful analysis and job responses at runtime. If the 
 
 Completed reports can be downloaded locally as JSON or Markdown. The export is generated in the browser and does not send the report to another service.
 
+The report also includes a transparent, heuristic security-signal summary with severity labels and remediation suggestions. It is intentionally presented as a signal check, not as a complete security audit.
+
 Build the frontend as a standalone production container:
 
 ```bash

@@ -302,6 +302,130 @@ summary:focus-visible {
   font-weight: 700;
 }
 
+.security-summary {
+  margin-bottom: 1.5rem;
+  border: 1px solid rgba(177, 195, 232, 0.12);
+  border-radius: 1.15rem;
+  padding: 1.25rem;
+  background: rgba(20, 30, 57, 0.64);
+}
+
+.security-summary-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.security-summary-heading .eyebrow {
+  margin-bottom: 0.4rem;
+}
+
+.security-summary-heading h3 {
+  margin: 0;
+  color: #f2f5fc;
+  font-size: 1.1rem;
+}
+
+.security-score {
+  flex: 0 0 auto;
+  border-radius: 0.75rem;
+  padding: 0.45rem 0.7rem;
+  font-size: 0.9rem;
+  font-weight: 800;
+}
+
+.score-good {
+  color: #83d7c6;
+  background: rgba(131, 215, 198, 0.13);
+}
+
+.score-warning {
+  color: #ffc28c;
+  background: rgba(255, 194, 140, 0.13);
+}
+
+.score-critical {
+  color: #ffad9d;
+  background: rgba(255, 123, 105, 0.13);
+}
+
+.score-neutral {
+  color: #aab5ca;
+  background: rgba(170, 181, 202, 0.13);
+}
+
+.security-summary-note {
+  margin: 0.75rem 0 0;
+  color: #8997b6;
+  font-size: 0.84rem;
+  line-height: 1.5;
+}
+
+.security-findings {
+  display: grid;
+  gap: 0.75rem;
+  margin: 1rem 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.security-finding {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 0.75rem;
+  align-items: start;
+  border-top: 1px solid rgba(177, 195, 232, 0.1);
+  padding-top: 0.75rem;
+}
+
+.security-finding strong {
+  color: #f2f5fc;
+  font-size: 0.9rem;
+}
+
+.security-finding p {
+  margin: 0.25rem 0 0;
+  color: #aab5ca;
+  font-size: 0.84rem;
+  line-height: 1.5;
+}
+
+.severity-badge {
+  border-radius: 999px;
+  padding: 0.25rem 0.5rem;
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.severity-high {
+  color: #ffad9d;
+  background: rgba(255, 123, 105, 0.13);
+}
+
+.severity-medium {
+  color: #ffc28c;
+  background: rgba(255, 194, 140, 0.13);
+}
+
+.severity-low {
+  color: #a8b8dc;
+  background: rgba(168, 184, 220, 0.13);
+}
+
+.severity-info {
+  color: #83d7c6;
+  background: rgba(131, 215, 198, 0.13);
+}
+
+.security-empty {
+  margin: 1rem 0 0;
+  color: #83d7c6;
+  font-size: 0.88rem;
+}
+
 .result-grid {
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 1rem;
@@ -622,6 +746,10 @@ summary {
   .export-actions {
     justify-items: stretch;
     justify-content: flex-start;
+  }
+
+  .security-summary-heading {
+    flex-direction: column;
   }
 
   .form-row .button {

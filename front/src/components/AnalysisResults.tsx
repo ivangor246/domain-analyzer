@@ -13,6 +13,7 @@ import {
   formatAnalysisJson,
   formatAnalysisMarkdown,
 } from '../utils/export'
+import SecuritySummary from './SecuritySummary'
 
 interface AnalysisResultsProps {
   analysis: DomainAnalysis
@@ -446,6 +447,8 @@ function AnalysisResults({ analysis }: AnalysisResultsProps) {
           </ul>
         </aside>
       )}
+
+      <SecuritySummary analysis={analysis} />
 
       <div className="detail-grid result-grid">
         <ResultSection title="Registration" description="RDAP registration metadata.">
