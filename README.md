@@ -63,6 +63,7 @@ The current configuration supports:
 - `TITLE` — customizes the service title shown by FastAPI;
 - provider URLs and `HTTP_USER_AGENT` — configure upstream endpoints and request identity;
 - provider timeouts, retry counts, response-size, redirect, domain, DNS, GeoIP, and RDAP limits.
+- `RATE_LIMIT_*` — configure the per-process request window for `GET /api/domain`.
 
 The complete list of supported settings and safe defaults is available in `back/.env.example`.
 
@@ -84,6 +85,8 @@ make clear    # Remove services, volumes, images, and orphans
 The API is available at `http://localhost:8000`.
 
 Application logs are emitted as one JSON object per line. Each response includes an `X-Request-ID` header that can be used to correlate HTTP and analysis logs.
+
+The domain analysis endpoint returns HTTP 429 after the configured number of requests from one client address within the rate-limit window. The limiter is in-memory and therefore applies separately in each backend process; use a shared proxy or distributed limiter for a multi-instance deployment.
 
 ## Run locally
 

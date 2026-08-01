@@ -37,6 +37,9 @@ class Settings(BaseSettings):
     RETRY_BACKOFF_SECONDS: float = Field(default=0.1, ge=0)
     GEOIP_URL: str = 'http://ip-api.com/batch'
     HTTP_USER_AGENT: str = 'Mozilla/5.0 (compatible; DomainAnalyzer/1.0)'
+    RATE_LIMIT_ENABLED: bool = True
+    RATE_LIMIT_REQUESTS: int = Field(default=30, gt=0)
+    RATE_LIMIT_WINDOW_SECONDS: float = Field(default=60, gt=0)
     DNS_SERVERS: list[str] = Field(default_factory=lambda: ['8.8.8.8', '1.1.1.1'])
     PROPAGATION_SERVERS: list[dict[str, str]] = Field(
         default_factory=lambda: [

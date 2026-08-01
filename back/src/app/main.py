@@ -6,6 +6,7 @@ from uuid import uuid4
 
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
+from fastapi.responses import JSONResponse
 from starlette.responses import Response
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
@@ -19,6 +20,7 @@ from app.api.root import root_router
 from app.core.config import settings
 from app.core.exceptions import AppError
 from app.core.logging_config import configure_logging, request_id_context
+from app.core.rate_limit import RateLimiter
 
 logger = getLogger(__name__)
 
@@ -44,6 +46,40 @@ def create_app() -> FastAPI:
     app.add_exception_handler(StarletteHTTPException, http_error_handler)
     app.add_exception_handler(RequestValidationError, request_validation_error_handler)
     app.add_exception_handler(Exception, unexpected_error_handler)
+
+    rate_limit_enabled = settings.RATE_LIMIT_ENABLED
+    rate_limit_requests = settings.RATE_LIMIT_REQUESTS
+    rate_limiter = RateLimiter(
+        max_requests=rate_limit_requests,
+        window_seconds=settings.RATE_LIMIT_WINDOW_SECONDS,
+    )
+
+    @app.middleware('http')
+    async def enforce_rate_limit(request: Request, call_next: Callable[[Request], Awaitable[Response]]) -> Response:
+        if rate_limit_enabled and request.method == 'GET' and request.url.path == '/api/domain':
+            client_key = request.client.host if request.client else 'unknown'
+            decision = await rate_limiter.check(client_key)
+            rate_headers = {
+                'X-RateLimit-Limit': str(rate_limit_requests),
+                'X-RateLimit-Remaining': str(decision.remaining),
+            }
+            if not decision.allowed:
+                rate_headers['Retry-After'] = str(decision.retry_after)
+                return JSONResponse(
+                    status_code=429,
+                    content={
+                        'code': 'rate_limit_exceeded',
+                        'message': 'Too many requests. Try again later.',
+                    },
+                    headers=rate_headers,
+                )
+
+            response = await call_next(request)
+            for name, value in rate_headers.items():
+                response.headers[name] = value
+            return response
+
+        return await call_next(request)
 
     @app.middleware('http')
     async def log_request(request: Request, call_next: Callable[[Request], Awaitable[Response]]) -> Response:

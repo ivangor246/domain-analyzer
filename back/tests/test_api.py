@@ -2,7 +2,9 @@ import re
 import unittest
 
 import httpx
+from unittest.mock import patch
 
+from app.core.config import settings
 from app.main import create_app
 
 
@@ -42,3 +44,24 @@ class ApiTestCase(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual(response.status_code, 404)
         self.assertEqual(response.json(), {'code': 'http_error', 'message': 'Not Found'})
+
+    async def test_domain_endpoint_returns_rate_limit_error(self) -> None:
+        with patch.object(settings, 'RATE_LIMIT_REQUESTS', 1):
+            app = create_app()
+
+        async with httpx.AsyncClient(
+            transport=httpx.ASGITransport(app=app),
+            base_url='http://test',
+        ) as client:
+            first_response = await client.get('/api/domain', params={'d': 'invalid'})
+            second_response = await client.get('/api/domain', params={'d': 'invalid'})
+
+        self.assertEqual(first_response.status_code, 400)
+        self.assertEqual(second_response.status_code, 429)
+        self.assertEqual(
+            second_response.json(),
+            {'code': 'rate_limit_exceeded', 'message': 'Too many requests. Try again later.'},
+        )
+        self.assertEqual(second_response.headers['X-RateLimit-Limit'], '1')
+        self.assertEqual(second_response.headers['X-RateLimit-Remaining'], '0')
+        self.assertEqual(second_response.headers['Retry-After'], '60')
