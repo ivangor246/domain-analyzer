@@ -1,6 +1,7 @@
 from functools import lru_cache
+from typing import Self
 
-from pydantic import Field
+from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -37,6 +38,11 @@ class Settings(BaseSettings):
     RETRY_BACKOFF_SECONDS: float = Field(default=0.1, ge=0)
     GEOIP_URL: str = 'http://ip-api.com/batch'
     HTTP_USER_AGENT: str = 'Mozilla/5.0 (compatible; DomainAnalyzer/1.0)'
+    REDIS_URL: str = 'redis://redis:6379/0'
+    CELERY_TASK_TIME_LIMIT_SECONDS: int = Field(default=900, gt=0)
+    CELERY_TASK_SOFT_TIME_LIMIT_SECONDS: int = Field(default=840, gt=0)
+    CELERY_RESULT_EXPIRES_SECONDS: int = Field(default=3600, gt=0)
+    CELERY_WORKER_CONCURRENCY: int = Field(default=2, gt=0)
     RATE_LIMIT_ENABLED: bool = True
     RATE_LIMIT_REQUESTS: int = Field(default=30, gt=0)
     RATE_LIMIT_WINDOW_SECONDS: float = Field(default=60, gt=0)
@@ -64,6 +70,12 @@ class Settings(BaseSettings):
     @property
     def REDOC_URL(self) -> str | None:
         return '/api/redoc' if self.DOCS else None
+
+    @model_validator(mode='after')
+    def validate_celery_time_limits(self) -> Self:
+        if self.CELERY_TASK_SOFT_TIME_LIMIT_SECONDS >= self.CELERY_TASK_TIME_LIMIT_SECONDS:
+            raise ValueError('CELERY_TASK_SOFT_TIME_LIMIT_SECONDS must be less than CELERY_TASK_TIME_LIMIT_SECONDS')
+        return self
 
 
 @lru_cache

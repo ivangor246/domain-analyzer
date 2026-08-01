@@ -1,4 +1,15 @@
 services:
+  redis:
+    image: redis:7-alpine
+    command: redis-server --appendonly yes
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
   app:
     build:
       context: .
@@ -7,10 +18,36 @@ services:
       - .env
     environment:
       DEV_MODE: ${DEV_MODE:-False} # Set to True by make dev
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
     ports:
       - 8000:8000
+    depends_on:
+      redis:
+        condition: service_healthy
     develop:
       watch:
         - action: sync
           path: ./src
           target: /project/src
+
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: ["worker"]
+    env_file:
+      - .env
+    environment:
+      DEV_MODE: "False"
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
+    depends_on:
+      redis:
+        condition: service_healthy
+    develop:
+      watch:
+        - action: sync
+          path: ./src
+          target: /project/src
+
+volumes:
+  redis_data:

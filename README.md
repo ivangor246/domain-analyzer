@@ -30,7 +30,7 @@ For safety, the backend only analyzes domains that resolve to public IP addresse
 │   ├── pyproject.toml       # Backend dependencies and tooling
 │   ├── poetry.lock
 │   ├── Dockerfile
-│   ├── docker-compose.yml
+│   ├── docker-compose.yml   # API, Celery worker, and Redis
 │   └── entrypoint.sh
 ├── front/                   # Vite + TypeScript + React application
 ├── AGENTS.md                # Instructions for AI agents
@@ -62,6 +62,8 @@ The current configuration supports:
 - `DEV_MODE=True` — enables development behavior when running through Compose;
 - `TITLE` — customizes the service title shown by FastAPI;
 - provider URLs and `HTTP_USER_AGENT` — configure upstream endpoints and request identity;
+- `REDIS_URL` — configure the Redis broker and result backend used by the background worker;
+- `CELERY_*` — configure worker concurrency, task time limits, and result retention;
 - provider timeouts, retry counts, response-size, redirect, domain, DNS, GeoIP, and RDAP limits.
 - `RATE_LIMIT_*` — configure the per-process request window for `GET /api/domain`.
 - `CORS_ORIGINS` — configure the explicit frontend origins allowed to call the API.
@@ -134,7 +136,7 @@ curl 'http://localhost:8000/api/domain?d=example.com'
 Invalid domains return HTTP 400. An unsuccessful RDAP lookup is reported in `analysis_errors` while other checks
 continue when possible.
 
-The initial API is intentionally synchronous: `GET /api/domain` completes the available checks in one request and returns partial results when individual providers fail. A background job endpoint will be introduced only if the analysis duration or workload requires it.
+The initial API remains synchronous: `GET /api/domain` completes the available checks in one request and returns partial results when individual providers fail. The Compose stack now includes the Celery worker and Redis foundation for the background job API planned in `PLAN.md`; the worker is not exposed as a public endpoint yet.
 
 When `DOCS=True`, interactive API documentation is available at:
 
