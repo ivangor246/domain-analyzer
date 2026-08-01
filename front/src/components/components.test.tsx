@@ -35,6 +35,19 @@ const analysis: DomainAnalysis = {
     results: [{ port: 443, open: true, status: 'open', service: 'https' }],
   },
   latency: null,
+  metadata: {
+    started_at: '2026-08-01T10:00:00Z',
+    completed_at: '2026-08-01T10:00:01Z',
+    duration_ms: 1000,
+    checks: {
+      rdap: {
+        status: 'failed',
+        completed_at: '2026-08-01T10:00:00.100Z',
+        duration_ms: 100,
+        sources: ['https://data.iana.org', 'https://rdap.example.test'],
+      },
+    },
+  },
   analysis_errors: [
     { check: 'rdap', code: 'rdap_unavailable', message: 'RDAP provider unavailable' },
   ],
@@ -67,6 +80,8 @@ describe('frontend status components', () => {
     expect(markup).toContain('aria-label="Analysis warnings"')
     expect(markup).toContain('RDAP provider unavailable')
     expect(markup).toContain('Security signals')
+    expect(markup).toContain('Freshness and sources')
+    expect(markup).toContain('https://data.iana.org')
     expect(markup).toContain('scope="col"')
     expect(markup).toContain('scope="row"')
   })

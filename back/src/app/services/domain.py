@@ -2,15 +2,17 @@ import asyncio
 import logging
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from time import perf_counter
-from typing import Any, TypeVar
+from typing import Any, Literal, TypeVar
+from urllib.parse import urlsplit
 
 from app.core.config import settings
 from app.core.exceptions import AnalysisTimeoutError, DomainValidationError
 from app.core.metrics import record_analysis, record_analysis_check
 from app.schemas.analysis import ANALYSIS_CHECKS
 from app.schemas.dns import DNSSchema, PropagationSchema
-from app.schemas.domain import AnalysisError, DomainSchema
+from app.schemas.domain import AnalysisCheckMetadata, AnalysisError, AnalysisMetadata, DomainSchema
 from app.schemas.geoip import GeoIPRecord
 from app.schemas.http import HTTPSchema
 from app.schemas.latency import LatencySchema
@@ -33,6 +35,15 @@ logger = logging.getLogger(__name__)
 
 T = TypeVar('T')
 ProgressCallback = Callable[[str, str, float | None], Awaitable[None]]
+CheckObservationStatus = Literal['successful', 'failed', 'timeout', 'cancelled']
+
+
+@dataclass(frozen=True)
+class _CheckObservation:
+    status: CheckObservationStatus
+    completed_at: datetime
+    duration_ms: float
+
 
 _ANALYSIS_FAILURES: dict[str, tuple[str, str]] = {
     'rdap': ('rdap_unavailable', 'RDAP analysis failed.'),
@@ -71,6 +82,80 @@ def _analysis_error(check: str, timed_out: bool = False) -> AnalysisError:
     code, message = _ANALYSIS_FAILURES[check]
     logger.warning('domain analysis check failed', extra={'check': check})
     return AnalysisError(check=check, code=code, message=message)
+
+
+def _record_observation(
+    observations: dict[str, _CheckObservation],
+    check: str,
+    started_at: float,
+    status: CheckObservationStatus,
+) -> None:
+    observations[check] = _CheckObservation(
+        status=status,
+        completed_at=datetime.now(timezone.utc),
+        duration_ms=round((perf_counter() - started_at) * 1000, 2),
+    )
+
+
+def _safe_source_url(value: str) -> str:
+    try:
+        parsed = urlsplit(value.strip())
+        if not parsed.scheme or not parsed.hostname:
+            return 'configured provider'
+        hostname = parsed.hostname
+        if ':' in hostname:
+            hostname = f'[{hostname}]'
+        port = f':{parsed.port}' if parsed.port is not None else ''
+    except ValueError:
+        return 'configured provider'
+    return f'{parsed.scheme}://{hostname}{port}'
+
+
+def _sources_for_check(check: str, domain: str, rdap_result: RDAPResponse | None) -> list[str]:
+    if check == 'rdap':
+        sources = [_safe_source_url(settings.BOOTSTRAP_URL)]
+        if rdap_result is not None:
+            sources.append(_safe_source_url(rdap_result.server))
+        return list(dict.fromkeys(sources))
+    if check == 'dns':
+        return [f'dns://{server}' for server in settings.DNS_SERVERS]
+    if check == 'dns_propagation':
+        return [f'{server["name"]} ({server["ip"]})' for server in settings.PROPAGATION_SERVERS]
+    if check == 'geoip':
+        return [_safe_source_url(settings.GEOIP_URL)]
+    if check == 'http':
+        return [f'http://{domain}', f'https://{domain}']
+    if check == 'ssl':
+        return [f'tls://{domain}:443']
+    if check == 'ports':
+        return [f'tcp://{domain}']
+    if check == 'latency':
+        return [f'tcp://{domain}:80', f'tcp://{domain}:443']
+    return []
+
+
+def _build_analysis_metadata(
+    started_at: datetime,
+    completed_at: datetime,
+    duration_ms: float,
+    domain: str,
+    observations: dict[str, _CheckObservation],
+    rdap_result: RDAPResponse | None,
+) -> AnalysisMetadata:
+    return AnalysisMetadata(
+        started_at=started_at,
+        completed_at=completed_at,
+        duration_ms=duration_ms,
+        checks={
+            check: AnalysisCheckMetadata(
+                status=observation.status,
+                completed_at=observation.completed_at,
+                duration_ms=observation.duration_ms,
+                sources=_sources_for_check(check, domain, rdap_result),
+            )
+            for check, observation in observations.items()
+        },
+    )
 
 
 async def _report_progress(
@@ -118,9 +203,12 @@ async def _load_rdap_context(
     dependencies: DomainDependencies,
     deadline: float,
     progress_callback: ProgressCallback | None,
+    observations: dict[str, _CheckObservation],
 ) -> tuple[list[str], str]:
+    started_at = perf_counter()
     remaining = deadline - asyncio.get_running_loop().time()
     if remaining <= 0:
+        _record_observation(observations, 'rdap', started_at, 'timeout')
         errors.append(_analysis_error('rdap', timed_out=True))
         await _report_progress(progress_callback, 'rdap', 'failed')
         return [], domain
@@ -131,6 +219,7 @@ async def _load_rdap_context(
         if servers:
             return servers, rdap_domain
     except asyncio.TimeoutError:
+        _record_observation(observations, 'rdap', started_at, 'timeout')
         errors.append(_analysis_error('rdap', timed_out=True))
         await _report_progress(progress_callback, 'rdap', 'failed')
         return [], domain
@@ -139,6 +228,7 @@ async def _load_rdap_context(
     except Exception:
         pass
 
+    _record_observation(observations, 'rdap', started_at, 'failed')
     errors.append(_analysis_error('rdap'))
     await _report_progress(progress_callback, 'rdap', 'failed')
     return [], domain
@@ -151,27 +241,33 @@ async def _run_check(
     analysis_id: str | None,
     task_id: str | None,
     progress_callback: ProgressCallback | None,
+    observations: dict[str, _CheckObservation],
 ) -> Any:
     started_at = perf_counter()
     progress_status = 'successful'
     metric_status = 'success'
+    observation_status: CheckObservationStatus = 'successful'
     await _report_progress(progress_callback, check, 'running')
     try:
         return await operation
     except asyncio.TimeoutError:
         progress_status = 'failed'
         metric_status = 'timeout'
+        observation_status = 'timeout'
         raise
     except asyncio.CancelledError:
         progress_status = 'failed'
         metric_status = 'cancelled'
+        observation_status = 'cancelled'
         raise
     except Exception:
         progress_status = 'failed'
         metric_status = 'failed'
+        observation_status = 'failed'
         raise
     finally:
         duration_seconds = perf_counter() - started_at
+        _record_observation(observations, check, started_at, observation_status)
         record_analysis_check(check, metric_status, duration_seconds)
         logger.info(
             'domain analysis check completed',
@@ -196,6 +292,7 @@ async def _collect_results(
     analysis_id: str | None,
     task_id: str | None,
     progress_callback: ProgressCallback | None,
+    observations: dict[str, _CheckObservation],
 ) -> dict[str, object]:
     operations: dict[str, Awaitable[Any]] = {
         'dns': dependencies.dns_resolver.resolve(domain=domain),
@@ -209,7 +306,9 @@ async def _collect_results(
         operations['rdap'] = dependencies.rdap_client.query(domain=rdap_domain, servers=servers)
 
     tasks = {
-        check: asyncio.create_task(_run_check(check, domain, operation, analysis_id, task_id, progress_callback))
+        check: asyncio.create_task(
+            _run_check(check, domain, operation, analysis_id, task_id, progress_callback, observations)
+        )
         for check, operation in operations.items()
     }
     pending: set[asyncio.Task[Any]] = set()
@@ -264,10 +363,12 @@ async def _lookup_geoip(
     analysis_id: str | None,
     task_id: str | None,
     progress_callback: ProgressCallback | None,
+    observations: dict[str, _CheckObservation],
 ) -> dict[str, GeoIPRecord]:
     started_at = perf_counter()
     remaining = deadline - asyncio.get_running_loop().time()
     if remaining <= 0:
+        _record_observation(observations, 'geoip', started_at, 'timeout')
         errors.append(_analysis_error('geoip', timed_out=True))
         duration_seconds = perf_counter() - started_at
         record_analysis_check('geoip', 'timeout', duration_seconds)
@@ -287,25 +388,30 @@ async def _lookup_geoip(
 
     progress_status = 'successful'
     metric_status = 'success'
+    observation_status: CheckObservationStatus = 'successful'
     await _report_progress(progress_callback, 'geoip', 'running')
     try:
         return await asyncio.wait_for(dependencies.geoip_service.lookup(ips=ips), timeout=remaining)
     except asyncio.TimeoutError:
         progress_status = 'failed'
         metric_status = 'timeout'
+        observation_status = 'timeout'
         errors.append(_analysis_error('geoip', timed_out=True))
         return {}
     except asyncio.CancelledError:
         progress_status = 'failed'
         metric_status = 'cancelled'
+        observation_status = 'cancelled'
         raise
     except Exception:
         progress_status = 'failed'
         metric_status = 'failed'
+        observation_status = 'failed'
         errors.append(_analysis_error('geoip'))
         return {}
     finally:
         duration_seconds = perf_counter() - started_at
+        _record_observation(observations, 'geoip', started_at, observation_status)
         record_analysis_check('geoip', metric_status, duration_seconds)
         logger.info(
             'domain analysis check completed',
@@ -360,6 +466,7 @@ class DomainService:
         progress_callback: ProgressCallback | None = None,
     ) -> DomainSchema:
         started_at = perf_counter()
+        started_at_utc = datetime.now(timezone.utc)
         deadline = asyncio.get_running_loop().time() + settings.ANALYSIS_TIMEOUT_SECONDS
         try:
             domain = validate_domain(domain=domain)
@@ -384,6 +491,7 @@ class DomainService:
             },
         )
         errors: list[AnalysisError] = []
+        observations: dict[str, _CheckObservation] = {}
         for check in ANALYSIS_CHECKS:
             await _report_progress(progress_callback, check, 'queued')
 
@@ -393,6 +501,7 @@ class DomainService:
             self.dependencies,
             deadline,
             progress_callback,
+            observations,
         )
         raw_results = await _collect_results(
             domain,
@@ -403,6 +512,7 @@ class DomainService:
             analysis_id,
             task_id,
             progress_callback,
+            observations,
         )
 
         rdap_result = _get_rdap_result(raw_results, errors)
@@ -423,6 +533,7 @@ class DomainService:
             analysis_id=analysis_id,
             task_id=task_id,
             progress_callback=progress_callback,
+            observations=observations,
         )
 
         dns_schema = DNSSchema(
@@ -438,6 +549,7 @@ class DomainService:
             propagation=propagation_result,
         )
 
+        completed_at = datetime.now(timezone.utc)
         result = DomainSchema(
             domain=domain,
             rdap_server=rdap_result.server if rdap_result else None,
@@ -454,6 +566,14 @@ class DomainService:
             ssl=ssl_result,
             ports=ports_result,
             latency=latency_result,
+            metadata=_build_analysis_metadata(
+                started_at=started_at_utc,
+                completed_at=completed_at,
+                duration_ms=round((perf_counter() - started_at) * 1000, 2),
+                domain=domain,
+                observations=observations,
+                rdap_result=rdap_result,
+            ),
             analysis_errors=errors,
         )
         logger.info(

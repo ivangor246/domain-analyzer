@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react'
 
 import type {
+  AnalysisMetadata,
   DomainAnalysis,
   HTTPProbeResult,
   LatencyResult,
@@ -81,6 +82,13 @@ function formatDate(value: string | null) {
 
   const date = new Date(value)
   return Number.isNaN(date.getTime()) ? value : date.toLocaleDateString()
+}
+
+function formatDateTime(value: string) {
+  const date = new Date(value)
+  return Number.isNaN(date.getTime())
+    ? value
+    : date.toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })
 }
 
 function SummaryCard({ label, value }: { label: string; value: ReactNode }) {
@@ -399,6 +407,57 @@ function LatencyCard({ label, result }: { label: string; result: LatencyResult |
   )
 }
 
+function AnalysisMetadataPanel({ metadata }: { metadata?: AnalysisMetadata | null }) {
+  if (!metadata) {
+    return null
+  }
+
+  return (
+    <section className="metadata-panel" aria-labelledby="metadata-heading">
+      <div className="section-heading">
+        <h3 id="metadata-heading">Freshness and sources</h3>
+        <p>When each check completed, how long it took, and which public source was used.</p>
+      </div>
+      <div className="metadata-summary">
+        <SummaryCard label="Completed" value={formatDateTime(metadata.completed_at)} />
+        <SummaryCard label="Analysis duration" value={`${metadata.duration_ms} ms`} />
+        <SummaryCard label="Checks reported" value={Object.keys(metadata.checks).length} />
+      </div>
+      {Object.keys(metadata.checks).length > 0 && (
+        <details className="metadata-details" open>
+          <summary>Check sources</summary>
+          <div className="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th scope="col">Check</th>
+                  <th scope="col">Status</th>
+                  <th scope="col">Completed</th>
+                  <th scope="col">Duration</th>
+                  <th scope="col">Source</th>
+                </tr>
+              </thead>
+              <tbody>
+                {Object.entries(metadata.checks).map(([check, details]) => (
+                  <tr key={check}>
+                    <th scope="row">{check.replaceAll('_', ' ')}</th>
+                    <td>
+                      <span className={`status-pill status-${details.status}`}>{details.status}</span>
+                    </td>
+                    <td>{formatDateTime(details.completed_at)}</td>
+                    <td>{details.duration_ms} ms</td>
+                    <td>{details.sources.join(', ') || '—'}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </details>
+      )}
+    </section>
+  )
+}
+
 function AnalysisResults({ analysis }: AnalysisResultsProps) {
   const exportJson = () => {
     downloadFile(formatAnalysisJson(analysis), filenameForDomain(analysis.domain, 'json'), 'application/json')
@@ -447,6 +506,8 @@ function AnalysisResults({ analysis }: AnalysisResultsProps) {
           </ul>
         </aside>
       )}
+
+      <AnalysisMetadataPanel metadata={analysis.metadata} />
 
       <SecuritySummary analysis={analysis} />
 

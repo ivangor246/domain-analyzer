@@ -1,5 +1,7 @@
 import type {
   AnalysisError,
+  AnalysisCheckMetadata,
+  AnalysisMetadata,
   AnalysisProgress,
   AnalysisJob,
   CAARecord,
@@ -86,6 +88,33 @@ function isAnalysisError(value: unknown): value is AnalysisError {
     isString(value.check) &&
     isString(value.code) &&
     isString(value.message)
+  )
+}
+
+function isAnalysisMetadataStatus(value: unknown): value is AnalysisCheckMetadata['status'] {
+  return value === 'successful' || value === 'failed' || value === 'timeout' || value === 'cancelled'
+}
+
+function isAnalysisCheckMetadata(value: unknown): value is AnalysisCheckMetadata {
+  return (
+    isRecord(value) &&
+    isAnalysisMetadataStatus(value.status) &&
+    isDateString(value.completed_at) &&
+    isFiniteNumber(value.duration_ms) &&
+    value.duration_ms >= 0 &&
+    isStringArray(value.sources)
+  )
+}
+
+function isAnalysisMetadata(value: unknown): value is AnalysisMetadata {
+  return (
+    isRecord(value) &&
+    isDateString(value.started_at) &&
+    isDateString(value.completed_at) &&
+    isFiniteNumber(value.duration_ms) &&
+    value.duration_ms >= 0 &&
+    isRecord(value.checks) &&
+    Object.values(value.checks).every(isAnalysisCheckMetadata)
   )
 }
 
@@ -294,6 +323,7 @@ export function isDomainAnalysis(value: unknown): value is DomainAnalysis {
     isNullable(value.ssl, isSSLData) &&
     isNullable(value.ports, isPortsData) &&
     isNullable(value.latency, isLatencyData) &&
+    (value.metadata === undefined || value.metadata === null || isAnalysisMetadata(value.metadata)) &&
     isArrayOf(value.analysis_errors, isAnalysisError)
   )
 }

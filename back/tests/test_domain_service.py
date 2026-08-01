@@ -118,6 +118,11 @@ class DomainServiceTestCase(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(latest_status['rdap'], 'failed')
         self.assertEqual(latest_status['dns'], 'successful')
         self.assertEqual(latest_status['geoip'], 'successful')
+        self.assertIsNotNone(result.metadata)
+        self.assertGreaterEqual(result.metadata.duration_ms, 0)
+        self.assertEqual(result.metadata.checks['rdap'].status, 'failed')
+        self.assertIn('https://data.iana.org', result.metadata.checks['rdap'].sources)
+        self.assertGreaterEqual(result.metadata.checks['dns'].duration_ms, 0)
 
     async def test_global_deadline_preserves_partial_results(self) -> None:
         dependencies = DomainDependencies(

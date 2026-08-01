@@ -30,6 +30,19 @@ const analysis: DomainAnalysis = {
   ssl: null,
   ports: null,
   latency: null,
+  metadata: {
+    started_at: '2026-08-01T10:00:00Z',
+    completed_at: '2026-08-01T10:00:01Z',
+    duration_ms: 1000,
+    checks: {
+      dns: {
+        status: 'successful',
+        completed_at: '2026-08-01T10:00:00.500Z',
+        duration_ms: 500,
+        sources: ['dns://8.8.8.8'],
+      },
+    },
+  },
   analysis_errors: [{ check: 'rdap', code: 'rdap_unavailable', message: 'Provider unavailable' }],
 }
 
@@ -47,6 +60,8 @@ describe('report export', () => {
     expect(result).toContain('# Domain Analyzer report')
     expect(result).toContain('| Exported at | 2026-08-01T12:00:00.000Z |')
     expect(result).toContain('| rdap | rdap_unavailable | Provider unavailable |')
+    expect(result).toContain('## Freshness and sources')
+    expect(result).toContain('| dns | successful | 2026-08-01T10:00:00.500Z | 500 ms | dns://8.8.8.8 |')
     expect(result).toContain('v=spf1 \\| test')
     expect(result).toContain('## Security signals')
     expect(result).toContain('HTTP security signals could not be assessed')

@@ -84,6 +84,29 @@ describe('analyzeDomain', () => {
     })
   })
 
+  it('rejects malformed freshness metadata', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        jsonResponse({
+          ...analysis(),
+          metadata: {
+            started_at: '2026-08-01T10:00:00Z',
+            completed_at: '2026-08-01T10:00:01Z',
+            duration_ms: -1,
+            checks: {},
+          },
+        }),
+      ),
+    )
+
+    await expect(analyzeDomain('example.com')).rejects.toMatchObject({
+      name: 'ApiError',
+      status: 200,
+      code: 'invalid_response',
+    })
+  })
+
   it('converts backend errors to ApiError', async () => {
     const response = new Response(
       JSON.stringify({ code: 'invalid_domain', message: 'Invalid domain format' }),

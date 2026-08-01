@@ -4,6 +4,22 @@ export interface AnalysisError {
   message: string
 }
 
+export type AnalysisMetadataStatus = 'successful' | 'failed' | 'timeout' | 'cancelled'
+
+export interface AnalysisCheckMetadata {
+  status: AnalysisMetadataStatus
+  completed_at: string
+  duration_ms: number
+  sources: string[]
+}
+
+export interface AnalysisMetadata {
+  started_at: string
+  completed_at: string
+  duration_ms: number
+  checks: Record<string, AnalysisCheckMetadata>
+}
+
 export type AnalysisCheckStatus = 'queued' | 'running' | 'successful' | 'partial' | 'failed'
 
 export interface AnalysisProgress {
@@ -161,6 +177,7 @@ export interface DomainAnalysis {
   ssl: SSLData | null
   ports: PortsData | null
   latency: LatencyData | null
+  metadata?: AnalysisMetadata | null
   analysis_errors: AnalysisError[]
 }
 

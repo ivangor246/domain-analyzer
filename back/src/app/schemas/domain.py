@@ -1,4 +1,5 @@
 from datetime import datetime
+from typing import Literal
 
 from pydantic import Field
 
@@ -17,6 +18,20 @@ class AnalysisError(BaseSchema):
     message: str = Field(..., description='Human-readable error message')
 
 
+class AnalysisCheckMetadata(BaseSchema):
+    status: Literal['successful', 'failed', 'timeout', 'cancelled'] = Field(..., description='Final check status')
+    completed_at: datetime = Field(..., description='UTC time when the check completed')
+    duration_ms: float = Field(..., ge=0, description='Check duration in milliseconds')
+    sources: list[str] = Field(default_factory=list, description='Sanitized data sources used by the check')
+
+
+class AnalysisMetadata(BaseSchema):
+    started_at: datetime = Field(..., description='UTC time when the analysis started')
+    completed_at: datetime = Field(..., description='UTC time when the analysis completed')
+    duration_ms: float = Field(..., ge=0, description='Total analysis duration in milliseconds')
+    checks: dict[str, AnalysisCheckMetadata] = Field(default_factory=dict, description='Per-check freshness metadata')
+
+
 class DomainSchema(BaseSchema):
     domain: str = Field(..., description='Normalized domain in punycode')
     rdap_server: str | None = Field(None, description='RDAP server used for query')
@@ -33,6 +48,7 @@ class DomainSchema(BaseSchema):
     ssl: SSLSchema | None = Field(None, description='SSL/TLS certificate and connection details')
     ports: PortsSchema | None = Field(None, description='TCP port scan results for common service ports')
     latency: LatencySchema | None = Field(None, description='TCP latency probes to port 80 and 443 (min/avg/max/loss)')
+    metadata: AnalysisMetadata | None = Field(None, description='Analysis timing, freshness, and source metadata')
     analysis_errors: list[AnalysisError] = Field(
         default_factory=list,
         description='Analysis checks that failed while other results were collected',

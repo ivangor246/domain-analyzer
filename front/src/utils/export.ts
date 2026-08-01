@@ -81,6 +81,24 @@ export function formatAnalysisMarkdown(analysis: DomainAnalysis, exportedAt = ne
     '',
   ]
 
+  if (analysis.metadata) {
+    lines.push(
+      '## Freshness and sources',
+      '',
+      tableRow('Analyzed at', analysis.metadata.completed_at),
+      tableRow('Analysis duration', `${analysis.metadata.duration_ms} ms`),
+      '',
+      '| Check | Status | Completed at | Duration | Sources |',
+      '| --- | --- | --- | --- | --- |',
+    )
+    for (const [check, metadata] of Object.entries(analysis.metadata.checks)) {
+      lines.push(
+        `| ${markdownCell(check)} | ${markdownCell(metadata.status)} | ${markdownCell(metadata.completed_at)} | ${markdownCell(`${metadata.duration_ms} ms`)} | ${markdownCell(listCell(metadata.sources))} |`,
+      )
+    }
+    lines.push('')
+  }
+
   if (analysis.analysis_errors.length === 0) {
     lines.push('No check warnings were reported.', '')
   } else {
