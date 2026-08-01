@@ -6,6 +6,8 @@ Domain Analyzer is intended for inspecting public domain infrastructure. The bac
 
 The service is not an authorization or asset-ownership system. Only analyze domains that you own or are explicitly authorized to inspect.
 
+See [PRIVACY.md](PRIVACY.md) for default data flows and retention considerations, and [ACCEPTABLE_USE.md](ACCEPTABLE_USE.md) for operational boundaries.
+
 ## Reporting a vulnerability
 
 Do not disclose a suspected vulnerability in a public issue. Send a private report to the repository maintainers with:

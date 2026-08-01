@@ -240,3 +240,5 @@ Before a public deployment:
 - retain structured logs and avoid logging provider response bodies or personal data.
 
 There is currently no built-in authentication or ownership verification. The service is an infrastructure inspection tool for authorized public targets, not a general-purpose scanning service. Review licensing, privacy, provider terms, and acceptable-use requirements before launch; no project license has been selected yet.
+
+See [SECURITY.md](SECURITY.md), [PRIVACY.md](PRIVACY.md), and [ACCEPTABLE_USE.md](ACCEPTABLE_USE.md) for the security policy, self-hosted data-flow template, and acceptable-use boundaries. The project license is intentionally not selected yet.
