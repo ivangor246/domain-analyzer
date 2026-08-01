@@ -14,3 +14,8 @@ class DomainValidationError(AppError):
 class RDAPError(AppError):
     status_code = 502
     code = 'rdap_unavailable'
+
+
+class TargetNotAllowedError(AppError):
+    status_code = 400
+    code = 'target_not_allowed'

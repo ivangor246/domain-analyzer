@@ -18,6 +18,7 @@ from .dns_resolver import DNSResolver, DNSRecords
 from .geoip import GeoIPService
 from .http_headers import HTTPHeadersService
 from .latency import LatencyService
+from .network_guard import NetworkTargetGuard
 from .port_scanner import PortScanner
 from .rdap_bootstrap import RDAPBootstrap
 from .rdap_client import RDAPClient, RDAPResponse
@@ -50,6 +51,7 @@ class DomainDependencies:
     ssl_service: type[SSLCertService] = SSLCertService
     port_scanner: type[PortScanner] = PortScanner
     latency_service: type[LatencyService] = LatencyService
+    network_guard: type[NetworkTargetGuard] = NetworkTargetGuard
 
 
 def _analysis_error(check: str) -> AnalysisError:
@@ -150,6 +152,7 @@ class DomainService:
         except ValueError as e:
             raise DomainValidationError(str(e)) from e
 
+        await self.dependencies.network_guard.validate(domain)
         logger.info('domain analysis started', extra={'domain': domain})
         errors: list[AnalysisError] = []
         servers, rdap_domain = await _load_rdap_context(domain, errors, self.dependencies)

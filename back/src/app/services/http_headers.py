@@ -1,12 +1,56 @@
 import asyncio
 import time
+from urllib.parse import urljoin, urlparse
 
 import httpx
 
+from app.core.exceptions import TargetNotAllowedError
 from app.schemas.http import HTTPProbeResult, HTTPSchema
 
+from .network_guard import NetworkTargetGuard
+
 _TIMEOUT = 10
+_MAX_REDIRECTS = 5
 _USER_AGENT = 'Mozilla/5.0 (compatible; DomainAnalyzer/1.0)'
+
+
+def _safe_redirect_url(current_url: str, location: str) -> str:
+    next_url = urljoin(current_url, location)
+    parsed = urlparse(next_url)
+    if parsed.scheme not in {'http', 'https'} or not parsed.hostname or parsed.username or parsed.password:
+        raise TargetNotAllowedError('Redirect target is not allowed.')
+    return next_url
+
+
+async def _request(client: httpx.AsyncClient, url: str) -> httpx.Response:
+    response = await client.head(url)
+    if response.status_code == 405:
+        response = await client.get(url)
+    return response
+
+
+async def _request_with_safe_redirects(
+    client: httpx.AsyncClient,
+    url: str,
+) -> tuple[httpx.Response, list[str]]:
+    current_url = url
+    redirect_chain: list[str] = []
+
+    for _ in range(_MAX_REDIRECTS + 1):
+        response = await _request(client, current_url)
+        if not response.is_redirect:
+            return response, redirect_chain
+
+        location = response.headers.get('location')
+        if not location:
+            return response, redirect_chain
+
+        next_url = _safe_redirect_url(current_url, location)
+        await NetworkTargetGuard.validate(urlparse(next_url).hostname or '')
+        redirect_chain.append(str(response.url))
+        current_url = next_url
+
+    return response, redirect_chain
 
 
 class HTTPHeadersService:
@@ -22,16 +66,18 @@ class HTTPHeadersService:
     async def _probe_url(url: str) -> HTTPProbeResult:
         start = time.perf_counter()
         try:
+            parsed_url = urlparse(url)
+            if not parsed_url.hostname:
+                return HTTPProbeResult(reachable=False)
+            await NetworkTargetGuard.validate(parsed_url.hostname)
+
             async with httpx.AsyncClient(
                 timeout=_TIMEOUT,
-                follow_redirects=True,
+                follow_redirects=False,
                 verify=False,
                 headers={'User-Agent': _USER_AGENT},
             ) as client:
-                response = await client.head(url)
-
-                if response.status_code == 405:
-                    response = await client.get(url)
+                response, redirect_chain = await _request_with_safe_redirects(client, url)
         except Exception:
             return HTTPProbeResult(reachable=False)
 
@@ -40,7 +86,6 @@ class HTTPHeadersService:
         def h(name: str) -> str | None:
             return response.headers.get(name) or None
 
-        redirect_chain = [str(r.url) for r in response.history]
         final_url = str(response.url)
 
         return HTTPProbeResult(

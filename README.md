@@ -19,6 +19,8 @@ If one external check is unavailable, the response still contains the successful
 
 Some results depend on the availability of the target domain and external services, including IANA RDAP bootstrap data, DNS resolvers, and the GeoIP provider.
 
+For safety, the backend only analyzes domains that resolve to public IP addresses. Private, loopback, link-local, reserved targets, and unsafe HTTP redirects are rejected.
+
 ## Repository layout
 
 ```text

@@ -1,9 +1,12 @@
 from datetime import datetime
+from urllib.parse import urlparse
 
 import httpx
 from pydantic import BaseModel
 
 from app.core.exceptions import RDAPError
+
+from .network_guard import NetworkTargetGuard
 
 
 class RDAPResponse(BaseModel):
@@ -20,8 +23,21 @@ class RDAPResponse(BaseModel):
 class RDAPClient:
     @staticmethod
     async def query(domain: str, servers: list[str]) -> RDAPResponse:
-        async with httpx.AsyncClient(timeout=10, follow_redirects=True) as client:
+        async with httpx.AsyncClient(timeout=10, follow_redirects=False) as client:
             for server in servers:
+                parsed_server = urlparse(server)
+                if (
+                    parsed_server.scheme not in {'http', 'https'}
+                    or not parsed_server.hostname
+                    or parsed_server.username
+                    or parsed_server.password
+                ):
+                    continue
+                try:
+                    await NetworkTargetGuard.validate(parsed_server.hostname)
+                except Exception:
+                    continue
+
                 url = f'{server.rstrip("/")}/domain/{domain}'
                 try:
                     response = await client.get(url)
