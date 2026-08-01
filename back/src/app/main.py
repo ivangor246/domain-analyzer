@@ -19,9 +19,9 @@ from app.api.errors import (
 )
 from app.api.root import root_router
 from app.core.config import settings
-from app.core.exceptions import AppError
+from app.core.exceptions import AppError, RateLimitUnavailableError
 from app.core.logging_config import configure_logging, request_id_context
-from app.core.rate_limit import RateLimiter
+from app.core.rate_limit import RateLimiter, RedisRateLimiter
 
 logger = getLogger(__name__)
 
@@ -66,16 +66,38 @@ def create_app() -> FastAPI:
 
     rate_limit_enabled = settings.RATE_LIMIT_ENABLED
     rate_limit_requests = settings.RATE_LIMIT_REQUESTS
-    rate_limiter = RateLimiter(
-        max_requests=rate_limit_requests,
-        window_seconds=settings.RATE_LIMIT_WINDOW_SECONDS,
+    rate_limit_fallback = (
+        RateLimiter(
+            max_requests=rate_limit_requests,
+            window_seconds=settings.RATE_LIMIT_WINDOW_SECONDS,
+        )
+        if settings.RATE_LIMIT_REDIS_FALLBACK_ENABLED
+        else None
+    )
+    rate_limiter = (
+        RedisRateLimiter(
+            max_requests=rate_limit_requests,
+            window_seconds=settings.RATE_LIMIT_WINDOW_SECONDS,
+            fallback=rate_limit_fallback,
+        )
+        if settings.RATE_LIMIT_REDIS_ENABLED
+        else RateLimiter(
+            max_requests=rate_limit_requests,
+            window_seconds=settings.RATE_LIMIT_WINDOW_SECONDS,
+        )
     )
 
     @app.middleware('http')
     async def enforce_rate_limit(request: Request, call_next: Callable[[Request], Awaitable[Response]]) -> Response:
         if rate_limit_enabled and (request.method, request.url.path) in _RATE_LIMITED_PATHS:
             client_key = request.client.host if request.client else 'unknown'
-            decision = await rate_limiter.check(client_key)
+            try:
+                decision = await rate_limiter.check(client_key)
+            except RateLimitUnavailableError as exc:
+                return JSONResponse(
+                    status_code=exc.status_code,
+                    content={'code': exc.code, 'message': str(exc)},
+                )
             rate_headers = {
                 'X-RateLimit-Limit': str(rate_limit_requests),
                 'X-RateLimit-Remaining': str(decision.remaining),

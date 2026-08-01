@@ -34,3 +34,8 @@ class AnalysisConflictError(AppError):
 class AnalysisQueueError(AppError):
     status_code = 503
     code = 'analysis_queue_unavailable'
+
+
+class RateLimitUnavailableError(AppError):
+    status_code = 503
+    code = 'rate_limit_unavailable'

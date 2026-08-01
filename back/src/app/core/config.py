@@ -39,12 +39,15 @@ class Settings(BaseSettings):
     GEOIP_URL: str = 'http://ip-api.com/batch'
     HTTP_USER_AGENT: str = 'Mozilla/5.0 (compatible; DomainAnalyzer/1.0)'
     REDIS_URL: str = 'redis://redis:6379/0'
+    REDIS_TIMEOUT_SECONDS: float = Field(default=5, gt=0)
     CELERY_TASK_TIME_LIMIT_SECONDS: int = Field(default=900, gt=0)
     CELERY_TASK_SOFT_TIME_LIMIT_SECONDS: int = Field(default=840, gt=0)
     CELERY_RESULT_EXPIRES_SECONDS: int = Field(default=3600, gt=0)
     CELERY_WORKER_CONCURRENCY: int = Field(default=2, gt=0)
     ANALYSIS_JOB_TTL_SECONDS: int = Field(default=3600, gt=0)
     RATE_LIMIT_ENABLED: bool = True
+    RATE_LIMIT_REDIS_ENABLED: bool = True
+    RATE_LIMIT_REDIS_FALLBACK_ENABLED: bool = True
     RATE_LIMIT_REQUESTS: int = Field(default=30, gt=0)
     RATE_LIMIT_WINDOW_SECONDS: float = Field(default=60, gt=0)
     CORS_ORIGINS: list[str] = Field(default_factory=lambda: ['http://localhost:5173'])

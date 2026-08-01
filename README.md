@@ -63,10 +63,11 @@ The current configuration supports:
 - `TITLE` — customizes the service title shown by FastAPI;
 - provider URLs and `HTTP_USER_AGENT` — configure upstream endpoints and request identity;
 - `REDIS_URL` — configure the Redis broker and result backend used by the background worker;
+- `REDIS_TIMEOUT_SECONDS` — bound Redis connection and command timeouts;
 - `CELERY_*` — configure worker concurrency, task time limits, logging, and result retention;
 - `ANALYSIS_JOB_TTL_SECONDS` — configure how long queued-analysis metadata remains available in Redis;
 - provider timeouts, retry counts, response-size, redirect, domain, DNS, GeoIP, and RDAP limits.
-- `RATE_LIMIT_*` — configure the per-process request window for analysis requests.
+- `RATE_LIMIT_*` — configure the request window, Redis backend, and local fallback for analysis requests;
 - `CORS_ORIGINS` — configure the explicit frontend origins allowed to call the API.
 
 The complete list of supported settings and safe defaults is available in `back/.env.example`.
@@ -90,7 +91,7 @@ The API is available at `http://localhost:8000`.
 
 Application logs are emitted as one JSON object per line. Each response includes an `X-Request-ID` header that can be used to correlate HTTP and analysis logs.
 
-The analysis endpoints return HTTP 429 after the configured number of requests from one client address within the rate-limit window. The limiter is currently in-memory and therefore applies separately in each backend process; Redis-backed distributed limiting is planned in `PLAN.md`.
+The analysis endpoints return HTTP 429 after the configured number of requests from one client address within the rate-limit window. Redis is used by default so the limit is shared across backend processes. Set `RATE_LIMIT_REDIS_FALLBACK_ENABLED=True` to keep a per-process fallback when Redis is temporarily unavailable; disable the fallback when rejecting requests is preferable to weakening the limit.
 
 Local frontend requests from `http://localhost:5173` are allowed by default. Set `CORS_ORIGINS` to the exact development or production origins used by the deployment; wildcard origins are intentionally not required.
 

@@ -3,7 +3,7 @@ import unittest
 
 from app.core.exceptions import AnalysisConflictError, DomainValidationError
 from app.schemas.analysis import AnalysisStatus
-from app.services.analysis_jobs import AnalysisJobService, AnalysisRecord, TaskSnapshot
+from app.services.analysis_jobs import AnalysisJobService, AnalysisRecord, RedisAnalysisJobStore, TaskSnapshot
 
 
 class FakeStore:
@@ -51,6 +51,23 @@ class FakeBroker:
 
     async def revoke(self, analysis_id: str) -> None:
         self.snapshots[analysis_id] = TaskSnapshot(state='REVOKED')
+
+
+class FakeAsyncRedis:
+    def __init__(self) -> None:
+        self.values: dict[str, str] = {}
+
+    async def set(self, key: str, value: str, ex: int, nx: bool = False):
+        if nx and key in self.values:
+            return None
+        self.values[key] = value
+        return True
+
+    async def get(self, key: str):
+        return self.values.get(key)
+
+    async def delete(self, key: str) -> None:
+        self.values.pop(key, None)
 
 
 class AnalysisJobServiceTestCase(unittest.IsolatedAsyncioTestCase):
@@ -105,3 +122,27 @@ class AnalysisJobServiceTestCase(unittest.IsolatedAsyncioTestCase):
         self.assertIsNotNone(job.created_at.tzinfo)
         self.assertEqual(job.created_at.tzinfo, timezone.utc)
         self.assertLessEqual(job.created_at, datetime.now(timezone.utc))
+
+
+class RedisAnalysisJobStoreTestCase(unittest.IsolatedAsyncioTestCase):
+    async def test_persists_job_metadata_without_blocking_event_loop(self) -> None:
+        client = FakeAsyncRedis()
+        store = RedisAnalysisJobStore()
+        store._client = client
+        record = AnalysisRecord(
+            analysis_id='a' * 32,
+            domain='example.com',
+            created_at=datetime.now(timezone.utc),
+        )
+
+        reserved = await store.reserve(record, 'request-1')
+        stored = await store.get(record.analysis_id)
+        await store.set_cancelled(record.analysis_id, True)
+        cancelled = await store.get(record.analysis_id)
+        await store.delete(record, 'request-1')
+
+        self.assertEqual(reserved, (record.analysis_id, True))
+        self.assertEqual(stored, record)
+        self.assertIsNotNone(cancelled)
+        self.assertTrue(cancelled.cancelled)
+        self.assertIsNone(await store.get(record.analysis_id))

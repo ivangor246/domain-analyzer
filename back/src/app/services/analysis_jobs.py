@@ -94,24 +94,29 @@ class RedisAnalysisJobStore:
         digest = hashlib.sha256(value.encode('utf-8')).hexdigest()
         return f'{_IDEMPOTENCY_KEY_PREFIX}{digest}'
 
-    def _get_client(self):
+    async def _get_client(self):
         with self._client_lock:
             if self._client is None:
-                from redis import Redis
+                from redis.asyncio import Redis
 
-                self._client = Redis.from_url(settings.REDIS_URL, decode_responses=True)
+                self._client = Redis.from_url(
+                    settings.REDIS_URL,
+                    decode_responses=True,
+                    socket_connect_timeout=settings.REDIS_TIMEOUT_SECONDS,
+                    socket_timeout=settings.REDIS_TIMEOUT_SECONDS,
+                )
             return self._client
 
-    def _reserve_sync(self, record: AnalysisRecord, idempotency_key: str | None) -> tuple[str, bool]:
-        client = self._get_client()
-        client.set(self._job_key(record.analysis_id), record.to_payload(), ex=settings.ANALYSIS_JOB_TTL_SECONDS)
+    async def _reserve_async(self, record: AnalysisRecord, idempotency_key: str | None) -> tuple[str, bool]:
+        client = await self._get_client()
+        await client.set(self._job_key(record.analysis_id), record.to_payload(), ex=settings.ANALYSIS_JOB_TTL_SECONDS)
 
         if idempotency_key is None:
             return record.analysis_id, True
 
         key = self._idempotency_key(idempotency_key)
         try:
-            created = client.set(
+            created = await client.set(
                 key,
                 record.analysis_id,
                 ex=settings.ANALYSIS_JOB_TTL_SECONDS,
@@ -120,17 +125,18 @@ class RedisAnalysisJobStore:
             if created:
                 return record.analysis_id, True
 
-            existing_id = client.get(key)
+            existing_id = await client.get(key)
             if existing_id is None:
                 raise RuntimeError('Idempotency key disappeared before it could be read')
-            client.delete(self._job_key(record.analysis_id))
+            await client.delete(self._job_key(record.analysis_id))
             return str(existing_id), False
         except Exception:
-            client.delete(self._job_key(record.analysis_id))
+            await client.delete(self._job_key(record.analysis_id))
             raise
 
-    def _get_sync(self, analysis_id: str) -> AnalysisRecord | None:
-        payload = self._get_client().get(self._job_key(analysis_id))
+    async def _get_async(self, analysis_id: str) -> AnalysisRecord | None:
+        client = await self._get_client()
+        payload = await client.get(self._job_key(analysis_id))
         if payload is None:
             return None
         try:
@@ -138,9 +144,9 @@ class RedisAnalysisJobStore:
         except (TypeError, ValueError, KeyError, json.JSONDecodeError):
             return None
 
-    def _set_cancelled_sync(self, analysis_id: str, cancelled: bool) -> None:
-        client = self._get_client()
-        payload = client.get(self._job_key(analysis_id))
+    async def _set_cancelled_async(self, analysis_id: str, cancelled: bool) -> None:
+        client = await self._get_client()
+        payload = await client.get(self._job_key(analysis_id))
         if payload is None:
             return
         try:
@@ -153,27 +159,27 @@ class RedisAnalysisJobStore:
             created_at=record.created_at,
             cancelled=cancelled,
         )
-        client.set(self._job_key(analysis_id), updated.to_payload(), ex=settings.ANALYSIS_JOB_TTL_SECONDS)
+        await client.set(self._job_key(analysis_id), updated.to_payload(), ex=settings.ANALYSIS_JOB_TTL_SECONDS)
 
-    def _delete_sync(self, record: AnalysisRecord, idempotency_key: str | None) -> None:
-        client = self._get_client()
-        client.delete(self._job_key(record.analysis_id))
+    async def _delete_async(self, record: AnalysisRecord, idempotency_key: str | None) -> None:
+        client = await self._get_client()
+        await client.delete(self._job_key(record.analysis_id))
         if idempotency_key is not None:
             key = self._idempotency_key(idempotency_key)
-            if client.get(key) == record.analysis_id:
-                client.delete(key)
+            if await client.get(key) == record.analysis_id:
+                await client.delete(key)
 
     async def reserve(self, record: AnalysisRecord, idempotency_key: str | None) -> tuple[str, bool]:
-        return await asyncio.to_thread(self._reserve_sync, record, idempotency_key)
+        return await self._reserve_async(record, idempotency_key)
 
     async def get(self, analysis_id: str) -> AnalysisRecord | None:
-        return await asyncio.to_thread(self._get_sync, analysis_id)
+        return await self._get_async(analysis_id)
 
     async def set_cancelled(self, analysis_id: str, cancelled: bool) -> None:
-        await asyncio.to_thread(self._set_cancelled_sync, analysis_id, cancelled)
+        await self._set_cancelled_async(analysis_id, cancelled)
 
     async def delete(self, record: AnalysisRecord, idempotency_key: str | None) -> None:
-        await asyncio.to_thread(self._delete_sync, record, idempotency_key)
+        await self._delete_async(record, idempotency_key)
 
 
 class CeleryTaskBroker:

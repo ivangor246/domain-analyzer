@@ -10,9 +10,12 @@ class SettingsTestCase(unittest.TestCase):
         settings = Settings(_env_file=None)
 
         self.assertEqual(settings.REDIS_URL, 'redis://redis:6379/0')
+        self.assertEqual(settings.REDIS_TIMEOUT_SECONDS, 5)
         self.assertEqual(settings.CELERY_TASK_TIME_LIMIT_SECONDS, 900)
         self.assertEqual(settings.CELERY_TASK_SOFT_TIME_LIMIT_SECONDS, 840)
         self.assertLess(settings.CELERY_TASK_SOFT_TIME_LIMIT_SECONDS, settings.CELERY_TASK_TIME_LIMIT_SECONDS)
+        self.assertTrue(settings.RATE_LIMIT_REDIS_ENABLED)
+        self.assertTrue(settings.RATE_LIMIT_REDIS_FALLBACK_ENABLED)
 
     def test_celery_soft_time_limit_must_be_shorter_than_hard_limit(self) -> None:
         with self.assertRaises(ValidationError):
