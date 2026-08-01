@@ -46,3 +46,18 @@ jobs:
       - name: Build frontend
         working-directory: front
         run: npm run build
+
+      - name: Build production image
+        run: docker build --build-arg VITE_API_URL=http://localhost:8000 -t domain-analyzer-front:ci front
+
+      - name: Smoke test production image
+        run: |
+          docker run --detach --name domain-analyzer-front-smoke --publish 4173:80 domain-analyzer-front:ci
+          trap 'docker rm --force domain-analyzer-front-smoke' EXIT
+          for attempt in $(seq 1 15); do
+            if curl --fail --silent http://127.0.0.1:4173/ > /dev/null; then
+              exit 0
+            fi
+            sleep 1
+          done
+          exit 1

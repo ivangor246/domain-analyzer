@@ -181,3 +181,18 @@ Build the frontend as a standalone production container:
 docker build --build-arg VITE_API_URL=http://localhost:8000 -t domain-analyzer-front ./front
 docker run --rm -p 4173:80 domain-analyzer-front
 ```
+
+## Deployment notes
+
+The backend and frontend are deployed independently. The backend image is built from `back/` and serves the API on port 8000. The frontend image is built from `front/`, serves the Vite output through Nginx on port 80, and receives `VITE_API_URL` at image build time.
+
+Before a public deployment:
+
+- set `CORS_ORIGINS` to exact trusted frontend origins;
+- place authentication, TLS termination, and a shared rate limiter at the edge because the application limiter is per process;
+- keep `DOCS=False` unless API documentation is intentionally exposed;
+- provide no secrets through frontend variables, because `VITE_*` values are bundled into browser assets;
+- confirm that external RDAP, DNS, GeoIP, and target-domain traffic is permitted by the deployment network;
+- retain structured logs and avoid logging provider response bodies or personal data.
+
+There is currently no built-in authentication or ownership verification. The service is an infrastructure inspection tool for authorized public targets, not a general-purpose scanning service. Review licensing, privacy, provider terms, and acceptable-use requirements before launch; no project license has been selected yet.
