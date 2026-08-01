@@ -2,9 +2,9 @@ import re
 import unittest
 
 import httpx
-from unittest.mock import patch
+from unittest.mock import AsyncMock, patch
 
-from app.api import analyses
+from app.api import analyses, health
 from app.core.config import settings
 from app.main import create_app
 from app.schemas.analysis import AnalysisJobSchema, AnalysisStatus
@@ -24,6 +24,34 @@ class ApiTestCase(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json(), {'status': 'ok'})
         self.assertRegex(response.headers['X-Request-ID'], re.compile(r'^[0-9a-f]{32}$'))
+
+    async def test_readiness_check_reports_available_dependencies(self) -> None:
+        with patch.object(
+            health,
+            'check_dependencies',
+            new=AsyncMock(return_value={'redis': True, 'worker': True}),
+        ):
+            response = await self.client.get('/api/health/ready')
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            response.json(),
+            {'status': 'ready', 'checks': {'redis': 'ok', 'worker': 'ok'}},
+        )
+
+    async def test_readiness_check_returns_service_unavailable_when_dependency_is_down(self) -> None:
+        with patch.object(
+            health,
+            'check_dependencies',
+            new=AsyncMock(return_value={'redis': True, 'worker': False}),
+        ):
+            response = await self.client.get('/api/health/ready')
+
+        self.assertEqual(response.status_code, 503)
+        self.assertEqual(
+            response.json(),
+            {'status': 'not_ready', 'checks': {'redis': 'ok', 'worker': 'unavailable'}},
+        )
 
     async def test_invalid_domain_returns_consistent_error(self) -> None:
         response = await self.client.get('/api/domain', params={'d': 'invalid'})

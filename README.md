@@ -111,13 +111,19 @@ poetry run uvicorn app.main:create_app \
 
 ## API
 
-Check that the service is running without triggering any external analysis:
+Check that the API process is alive without triggering any external analysis:
 
 ```bash
 curl 'http://localhost:8000/api/health'
 ```
 
-The endpoint returns `{"status":"ok"}` when the process is ready to handle requests.
+The liveness endpoint returns `{"status":"ok"}` and does not depend on Redis or a worker. Check deployment readiness separately:
+
+```bash
+curl -i 'http://localhost:8000/api/health/ready'
+```
+
+The readiness endpoint checks Redis and at least one responsive Celery worker. It returns HTTP 200 with `{"status":"ready", ...}` when both dependencies are available, or HTTP 503 with `{"status":"not_ready", ...}` otherwise.
 
 API errors use a consistent JSON shape:
 
