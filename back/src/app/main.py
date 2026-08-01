@@ -25,6 +25,11 @@ from app.core.rate_limit import RateLimiter
 
 logger = getLogger(__name__)
 
+_RATE_LIMITED_PATHS = {
+    ('GET', '/api/domain'),
+    ('POST', '/api/analyses'),
+}
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -55,8 +60,8 @@ def create_app() -> FastAPI:
         CORSMiddleware,
         allow_origins=settings.CORS_ORIGINS,
         allow_credentials=False,
-        allow_methods=['GET'],
-        allow_headers=['Accept', 'Content-Type'],
+        allow_methods=['GET', 'POST'],
+        allow_headers=['Accept', 'Content-Type', 'Idempotency-Key'],
     )
 
     rate_limit_enabled = settings.RATE_LIMIT_ENABLED
@@ -68,7 +73,7 @@ def create_app() -> FastAPI:
 
     @app.middleware('http')
     async def enforce_rate_limit(request: Request, call_next: Callable[[Request], Awaitable[Response]]) -> Response:
-        if rate_limit_enabled and request.method == 'GET' and request.url.path == '/api/domain':
+        if rate_limit_enabled and (request.method, request.url.path) in _RATE_LIMITED_PATHS:
             client_key = request.client.host if request.client else 'unknown'
             decision = await rate_limiter.check(client_key)
             rate_headers = {

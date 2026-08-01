@@ -63,9 +63,10 @@ The current configuration supports:
 - `TITLE` — customizes the service title shown by FastAPI;
 - provider URLs and `HTTP_USER_AGENT` — configure upstream endpoints and request identity;
 - `REDIS_URL` — configure the Redis broker and result backend used by the background worker;
-- `CELERY_*` — configure worker concurrency, task time limits, and result retention;
+- `CELERY_*` — configure worker concurrency, task time limits, logging, and result retention;
+- `ANALYSIS_JOB_TTL_SECONDS` — configure how long queued-analysis metadata remains available in Redis;
 - provider timeouts, retry counts, response-size, redirect, domain, DNS, GeoIP, and RDAP limits.
-- `RATE_LIMIT_*` — configure the per-process request window for `GET /api/domain`.
+- `RATE_LIMIT_*` — configure the per-process request window for analysis requests.
 - `CORS_ORIGINS` — configure the explicit frontend origins allowed to call the API.
 
 The complete list of supported settings and safe defaults is available in `back/.env.example`.
@@ -77,7 +78,7 @@ Do not commit `back/.env` or place secrets in the repository.
 From the repository root:
 
 ```bash
-make up       # Build and start the backend
+make up       # Build and start the backend, worker, and Redis
 make dev      # Start Compose watch mode with development settings
 make logs     # Show backend logs
 make stop     # Stop running services
@@ -89,7 +90,7 @@ The API is available at `http://localhost:8000`.
 
 Application logs are emitted as one JSON object per line. Each response includes an `X-Request-ID` header that can be used to correlate HTTP and analysis logs.
 
-The domain analysis endpoint returns HTTP 429 after the configured number of requests from one client address within the rate-limit window. The limiter is in-memory and therefore applies separately in each backend process; use a shared proxy or distributed limiter for a multi-instance deployment.
+The analysis endpoints return HTTP 429 after the configured number of requests from one client address within the rate-limit window. The limiter is currently in-memory and therefore applies separately in each backend process; Redis-backed distributed limiting is planned in `PLAN.md`.
 
 Local frontend requests from `http://localhost:5173` are allowed by default. Set `CORS_ORIGINS` to the exact development or production origins used by the deployment; wildcard origins are intentionally not required.
 
@@ -136,7 +137,24 @@ curl 'http://localhost:8000/api/domain?d=example.com'
 Invalid domains return HTTP 400. An unsuccessful RDAP lookup is reported in `analysis_errors` while other checks
 continue when possible.
 
-The initial API remains synchronous: `GET /api/domain` completes the available checks in one request and returns partial results when individual providers fail. The Compose stack now includes the Celery worker and Redis foundation for the background job API planned in `PLAN.md`; the worker is not exposed as a public endpoint yet.
+The compatible synchronous endpoint `GET /api/domain` completes the available checks in one request and returns partial results when individual providers fail.
+
+For long-running requests, queue an asynchronous analysis:
+
+```bash
+curl -X POST 'http://localhost:8000/api/analyses' \
+  -H 'Content-Type: application/json' \
+  -H 'Idempotency-Key: example-analysis-1' \
+  -d '{"domain":"example.com"}'
+```
+
+The response contains an analysis identifier and starts in the `queued` state. Poll its status and result with:
+
+```bash
+curl 'http://localhost:8000/api/analyses/<analysis-id>'
+```
+
+The status changes through `queued`, `running`, and a terminal `completed`, `failed`, or `cancelled` state. A queued or running job can be cancelled with `POST /api/analyses/<analysis-id>/cancel`. Job metadata and Celery results expire automatically; PostgreSQL is not required for this workflow.
 
 When `DOCS=True`, interactive API documentation is available at:
 

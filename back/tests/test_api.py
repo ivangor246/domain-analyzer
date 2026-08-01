@@ -4,8 +4,10 @@ import unittest
 import httpx
 from unittest.mock import patch
 
+from app.api import analyses
 from app.core.config import settings
 from app.main import create_app
+from app.schemas.analysis import AnalysisJobSchema, AnalysisStatus
 
 
 class ApiTestCase(unittest.IsolatedAsyncioTestCase):
@@ -80,15 +82,73 @@ class ApiTestCase(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(operation['parameters'][0]['name'], 'd')
         self.assertEqual(operation['parameters'][0]['schema']['maxLength'], settings.MAX_DOMAIN_LENGTH)
 
+    async def test_analysis_job_endpoints_use_async_contract(self) -> None:
+        job = AnalysisJobSchema(
+            id='a' * 32,
+            domain='example.com',
+            status=AnalysisStatus.QUEUED,
+            created_at='2026-01-01T00:00:00Z',
+        )
+
+        class FakeAnalysisService:
+            async def create(self, domain: str, idempotency_key: str | None = None) -> AnalysisJobSchema:
+                self.created = (domain, idempotency_key)
+                return job
+
+            async def get(self, analysis_id: str) -> AnalysisJobSchema:
+                self.requested = analysis_id
+                return job
+
+            async def cancel(self, analysis_id: str) -> AnalysisJobSchema:
+                self.cancelled = analysis_id
+                return job.model_copy(update={'status': AnalysisStatus.CANCELLED})
+
+        fake_service = FakeAnalysisService()
+        with patch.object(analyses, 'service', fake_service):
+            created = await self.client.post(
+                '/api/analyses',
+                json={'domain': 'example.com'},
+                headers={'Idempotency-Key': 'request-1'},
+            )
+            received = await self.client.get(f'/api/analyses/{job.id}')
+            cancelled = await self.client.post(f'/api/analyses/{job.id}/cancel')
+
+        self.assertEqual(created.status_code, 202)
+        self.assertEqual(created.json()['status'], 'queued')
+        self.assertEqual(fake_service.created, ('example.com', 'request-1'))
+        self.assertEqual(received.status_code, 200)
+        self.assertEqual(fake_service.requested, job.id)
+        self.assertEqual(cancelled.json()['status'], 'cancelled')
+        self.assertEqual(fake_service.cancelled, job.id)
+
+    async def test_invalid_async_analysis_domain_returns_consistent_error(self) -> None:
+        response = await self.client.post('/api/analyses', json={'domain': 'invalid'})
+
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.json(), {'code': 'invalid_domain', 'message': 'Invalid domain format'})
+
+    def test_openapi_describes_async_analysis_contract(self) -> None:
+        schema = create_app().openapi()
+
+        self.assertIn('/api/analyses', schema['paths'])
+        self.assertIn('/api/analyses/{analysis_id}', schema['paths'])
+        self.assertIn('/api/analyses/{analysis_id}/cancel', schema['paths'])
+        self.assertEqual(
+            schema['paths']['/api/analyses']['post']['responses']['202']['description'],
+            'Successful Response',
+        )
+
     async def test_cors_allows_configured_frontend_origin(self) -> None:
         response = await self.client.options(
-            '/api/domain',
+            '/api/analyses',
             headers={
                 'Origin': 'http://localhost:5173',
-                'Access-Control-Request-Method': 'GET',
+                'Access-Control-Request-Method': 'POST',
+                'Access-Control-Request-Headers': 'content-type,idempotency-key',
             },
         )
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.headers['Access-Control-Allow-Origin'], 'http://localhost:5173')
-        self.assertIn('GET', response.headers['Access-Control-Allow-Methods'])
+        self.assertIn('POST', response.headers['Access-Control-Allow-Methods'])
+        self.assertIn('Idempotency-Key', response.headers['Access-Control-Allow-Headers'])

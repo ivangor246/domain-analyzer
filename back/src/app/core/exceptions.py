@@ -19,3 +19,18 @@ class RDAPError(AppError):
 class TargetNotAllowedError(AppError):
     status_code = 400
     code = 'target_not_allowed'
+
+
+class AnalysisNotFoundError(AppError):
+    status_code = 404
+    code = 'analysis_not_found'
+
+
+class AnalysisConflictError(AppError):
+    status_code = 409
+    code = 'analysis_conflict'
+
+
+class AnalysisQueueError(AppError):
+    status_code = 503
+    code = 'analysis_queue_unavailable'
