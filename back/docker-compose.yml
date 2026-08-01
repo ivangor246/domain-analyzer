@@ -31,7 +31,7 @@ services:
     init: true
     mem_limit: 768m
     ports:
-      - 8000:8000
+      - ${APP_PORT:-8000}:8000
     pids_limit: 256
     read_only: true
     security_opt:

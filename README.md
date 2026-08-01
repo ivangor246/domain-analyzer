@@ -219,6 +219,14 @@ make front-test
 make front-build
 ```
 
+Run the backend and worker health smoke test through Compose after creating `back/.env`:
+
+```bash
+make compose-smoke
+```
+
+The smoke test uses an isolated Compose project and port `18000` by default, and removes its own containers and volumes on exit. Override `APP_PORT` or `COMPOSE_PROJECT_NAME` when needed.
+
 The frontend validates successful analysis and job responses at runtime. If the API returns an incompatible payload, it shows a controlled error instead of rendering untrusted malformed data.
 
 During asynchronous analysis, the frontend polls the job and shows the state and duration of each backend check.

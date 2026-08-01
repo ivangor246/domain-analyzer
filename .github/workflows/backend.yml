@@ -55,6 +55,15 @@ jobs:
         working-directory: back
         run: docker build --tag domain-analyzer-back:ci .
 
+      - name: Prepare Compose smoke environment
+        run: cp back/.env.example back/.env
+
+      - name: Run Compose smoke test
+        env:
+          APP_PORT: 18000
+          COMPOSE_PROJECT_NAME: domain-analyzer-back-ci
+        run: sh scripts/compose-smoke.sh
+
       - name: Smoke test hardened backend image
         run: |
           set -eu

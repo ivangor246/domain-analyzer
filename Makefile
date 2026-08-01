@@ -26,6 +26,9 @@ test:
 coverage:
 	cd back && PYTHONPATH=src poetry run coverage run -m unittest discover -s tests && poetry run coverage report --fail-under=80
 
+compose-smoke:
+	sh scripts/compose-smoke.sh
+
 lint:
 	cd back && poetry run ruff check src tests
 
