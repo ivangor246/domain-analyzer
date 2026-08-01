@@ -214,6 +214,19 @@ summary:focus-visible {
   gap: 1rem;
 }
 
+.results-actions {
+  display: grid;
+  justify-items: end;
+  gap: 0.75rem;
+}
+
+.export-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 0.5rem;
+}
+
 .results-heading .eyebrow {
   margin-bottom: 0.5rem;
 }
@@ -603,6 +616,12 @@ summary {
   .results-heading {
     align-items: stretch;
     flex-direction: column;
+  }
+
+  .results-actions,
+  .export-actions {
+    justify-items: stretch;
+    justify-content: flex-start;
   }
 
   .form-row .button {

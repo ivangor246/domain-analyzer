@@ -7,6 +7,12 @@ import type {
   Propagation,
   SSLData,
 } from '../api/types'
+import {
+  downloadFile,
+  filenameForDomain,
+  formatAnalysisJson,
+  formatAnalysisMarkdown,
+} from '../utils/export'
 
 interface AnalysisResultsProps {
   analysis: DomainAnalysis
@@ -393,6 +399,14 @@ function LatencyCard({ label, result }: { label: string; result: LatencyResult |
 }
 
 function AnalysisResults({ analysis }: AnalysisResultsProps) {
+  const exportJson = () => {
+    downloadFile(formatAnalysisJson(analysis), filenameForDomain(analysis.domain, 'json'), 'application/json')
+  }
+
+  const exportMarkdown = () => {
+    downloadFile(formatAnalysisMarkdown(analysis), filenameForDomain(analysis.domain, 'md'), 'text/markdown')
+  }
+
   return (
     <section className="analysis-results" aria-labelledby="results-heading">
       <div className="results-heading">
@@ -400,7 +414,17 @@ function AnalysisResults({ analysis }: AnalysisResultsProps) {
           <p className="eyebrow">Analysis report</p>
           <h2 id="results-heading">{analysis.domain}</h2>
         </div>
-        <span className="result-state">Complete with {analysis.analysis_errors.length} warning(s)</span>
+        <div className="results-actions">
+          <span className="result-state">Complete with {analysis.analysis_errors.length} warning(s)</span>
+          <div className="export-actions" aria-label="Export report">
+            <button type="button" className="button button-secondary" onClick={exportJson}>
+              JSON
+            </button>
+            <button type="button" className="button button-secondary" onClick={exportMarkdown}>
+              Markdown
+            </button>
+          </div>
+        </div>
       </div>
 
       <div className="summary-grid">
