@@ -1,4 +1,5 @@
 BACKEND_COMPOSE := back/docker-compose.yml
+FRONTEND_DIR := front
 
 # develop
 up:
@@ -32,3 +33,20 @@ format-check:
 	cd back && poetry run ruff format --check src tests
 
 check: test lint format-check
+
+front-install:
+	npm --prefix $(FRONTEND_DIR) install
+
+front-dev:
+	npm --prefix $(FRONTEND_DIR) run dev
+
+front-build:
+	npm --prefix $(FRONTEND_DIR) run build
+
+front-lint:
+	npm --prefix $(FRONTEND_DIR) run lint
+
+front-typecheck:
+	npm --prefix $(FRONTEND_DIR) run typecheck
+
+front-check: front-typecheck front-lint

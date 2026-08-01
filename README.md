@@ -155,4 +155,18 @@ The backend test suite uses Python's standard `unittest` runner and avoids netwo
 
 ## Frontend
 
-The frontend is planned but is not implemented yet. It will live in `front/`, use Vite, TypeScript, and React, and communicate with the backend through its HTTP API. Its dependencies and development commands must remain independent from the backend environment.
+The frontend is an independent Vite + TypeScript + React application in `front/`. Configure the backend URL before running it:
+
+```bash
+cp front/.env.example front/.env
+make front-install
+make front-dev
+```
+
+Frontend checks and production build are independent from the backend:
+
+```bash
+make front-typecheck
+make front-lint
+make front-build
+```
