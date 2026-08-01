@@ -10,6 +10,7 @@ from app.services.analysis_concurrency import (
     AnalysisConcurrencyUnavailableError,
     run_with_concurrency_limit,
 )
+from app.services.analysis_queue import mark_analysis_started
 from app.services.domain import DomainService
 
 
@@ -23,6 +24,7 @@ def analyze_domain_task(task, domain: str) -> dict[str, Any]:
             run_with_concurrency_limit(
                 task_id,
                 lambda: DomainService().analyze(domain, analysis_id=task_id, task_id=task_id),
+                on_acquired=lambda: mark_analysis_started(task_id),
             )
         )
         outcome = 'completed'

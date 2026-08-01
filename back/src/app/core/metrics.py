@@ -153,6 +153,12 @@ metrics.register('domain_analyzer_analysis_duration_seconds', 'histogram', 'Doma
 metrics.register('domain_analyzer_rate_limit_decisions_total', 'counter', 'Total number of rate-limit decisions.')
 metrics.register('domain_analyzer_jobs_total', 'counter', 'Total number of Celery analysis jobs by outcome.')
 metrics.register('domain_analyzer_job_duration_seconds', 'histogram', 'Celery analysis job duration in seconds.')
+metrics.register(
+    'domain_analyzer_analysis_queue_depth',
+    'gauge',
+    'Number of queued analysis jobs; -1 means the Redis queue tracker is unavailable.',
+)
+metrics.register('domain_analyzer_analysis_queue_available', 'gauge', 'Whether the Redis queue tracker is available.')
 
 
 def record_http_request(method: str, path: str, status_code: int, duration_seconds: float) -> None:

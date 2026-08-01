@@ -92,6 +92,7 @@ async def run_with_concurrency_limit(
     task_id: str,
     operation: Callable[[], Awaitable[T]],
     limiter: RedisAnalysisConcurrencyLimiter | None = None,
+    on_acquired: Callable[[], Awaitable[None]] | None = None,
 ) -> T:
     limiter = limiter or RedisAnalysisConcurrencyLimiter()
     acquired = await limiter.acquire(task_id)
@@ -99,6 +100,8 @@ async def run_with_concurrency_limit(
         raise AnalysisConcurrencyBusyError('The configured analysis concurrency limit is currently full.')
 
     try:
+        if on_acquired is not None:
+            await on_acquired()
         return await operation()
     finally:
         try:

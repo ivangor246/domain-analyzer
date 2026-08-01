@@ -4,7 +4,7 @@ import unittest
 import httpx
 from unittest.mock import AsyncMock, patch
 
-from app.api import analyses, health
+from app.api import analyses, health, metrics as metrics_api
 from app.core.config import settings
 from app.main import create_app
 from app.schemas.analysis import AnalysisJobSchema, AnalysisStatus
@@ -59,8 +59,17 @@ class ApiTestCase(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(response.status_code, 200)
         self.assertTrue(response.headers['content-type'].startswith('text/plain; version=0.0.4'))
         self.assertIn('# TYPE domain_analyzer_http_requests_total counter', response.text)
+        self.assertIn('# TYPE domain_analyzer_analysis_queue_depth gauge', response.text)
+        self.assertIn('# TYPE domain_analyzer_analysis_queue_available gauge', response.text)
         self.assertIn('# EOF', response.text)
         self.assertNotIn('example.com', response.text)
+
+    async def test_metrics_endpoint_reports_queue_depth_when_redis_is_available(self) -> None:
+        with patch.object(metrics_api.queue_tracker, 'depth', new=AsyncMock(return_value=4)):
+            response = await self.client.get('/api/metrics')
+
+        self.assertIn('domain_analyzer_analysis_queue_depth 4', response.text)
+        self.assertIn('domain_analyzer_analysis_queue_available 1', response.text)
 
     async def test_invalid_domain_returns_consistent_error(self) -> None:
         response = await self.client.get('/api/domain', params={'d': 'invalid'})

@@ -19,6 +19,7 @@ from app.core.exceptions import (
 from app.schemas.analysis import AnalysisJobSchema, AnalysisStatus
 from app.schemas.domain import DomainSchema
 from app.schemas.error import ErrorSchema
+from app.services.analysis_queue import mark_analysis_queued, remove_analysis_from_queue
 from app.utils.domain_validator import validate_domain
 
 _TASK_NAME = 'app.tasks.domain.analyze_domain_task'
@@ -295,9 +296,11 @@ class AnalysisJobService:
                 raise AnalysisConflictError('The idempotency key was already used for another domain.')
             return await self.get(analysis_id)
 
+        await mark_analysis_queued(record.analysis_id)
         try:
             await self.broker.enqueue(record.analysis_id, normalized_domain)
         except Exception as exc:
+            await remove_analysis_from_queue(record.analysis_id)
             await self.store.delete(record, key)
             raise AnalysisQueueError('Unable to enqueue the analysis job.') from exc
 
@@ -313,6 +316,7 @@ class AnalysisJobService:
         if record is None:
             raise AnalysisNotFoundError('Analysis job not found.')
         if record.cancelled:
+            await remove_analysis_from_queue(analysis_id)
             return self._job_from_snapshot(record, TaskSnapshot(state='REVOKED'))
 
         try:
@@ -333,6 +337,7 @@ class AnalysisJobService:
         except Exception as exc:
             raise AnalysisQueueError('Unable to read the analysis job.') from exc
         if snapshot.state in _TERMINAL_STATES:
+            await remove_analysis_from_queue(analysis_id)
             return self._job_from_snapshot(record, snapshot)
 
         await self.store.set_cancelled(analysis_id, True)
@@ -341,6 +346,8 @@ class AnalysisJobService:
         except Exception as exc:
             await self.store.set_cancelled(analysis_id, False)
             raise AnalysisQueueError('Unable to cancel the analysis job.') from exc
+
+        await remove_analysis_from_queue(analysis_id)
 
         return AnalysisJobSchema(
             id=record.analysis_id,

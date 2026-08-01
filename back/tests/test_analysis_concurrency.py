@@ -65,6 +65,23 @@ class AnalysisConcurrencyLimiterTestCase(unittest.IsolatedAsyncioTestCase):
         limiter.acquire.assert_awaited_once_with('task-1')
         limiter.release.assert_awaited_once_with('task-1')
 
+    async def test_runs_acquired_callback_before_operation(self) -> None:
+        limiter = RedisAnalysisConcurrencyLimiter()
+        limiter.acquire = AsyncMock(return_value=True)
+        limiter.release = AsyncMock()
+        events = []
+
+        async def callback() -> None:
+            events.append('callback')
+
+        async def operation() -> str:
+            events.append('operation')
+            return 'result'
+
+        await run_with_concurrency_limit('task-1', operation, limiter=limiter, on_acquired=callback)
+
+        self.assertEqual(events, ['callback', 'operation'])
+
 
 if __name__ == '__main__':
     unittest.main()

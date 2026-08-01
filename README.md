@@ -132,7 +132,7 @@ Process-local Prometheus-compatible metrics are available at:
 curl 'http://localhost:8000/api/metrics'
 ```
 
-The endpoint reports HTTP requests, rate-limit decisions, analysis durations, check outcomes, and Celery job outcomes. Metric labels do not contain domains, request IDs, or analysis IDs. Metrics are process-local; a multi-process deployment should scrape each backend process or aggregate them at the monitoring layer.
+The endpoint reports HTTP requests, rate-limit decisions, analysis durations, check outcomes, Celery job outcomes, and the Redis-backed queued-job depth. `domain_analyzer_analysis_queue_available` is `0` and the depth is `-1` when Redis cannot be queried. Metric labels do not contain domains, request IDs, or analysis IDs. Other metrics are process-local; a multi-process deployment should scrape each backend process or aggregate them at the monitoring layer.
 
 API errors use a consistent JSON shape:
 
