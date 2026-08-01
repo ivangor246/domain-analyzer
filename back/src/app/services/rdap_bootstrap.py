@@ -13,6 +13,7 @@ from app.utils.http import (
     retry_after_seconds,
     run_with_retries,
 )
+from app.utils.circuit_breaker import CircuitBreaker
 
 
 class RDAPBootstrap:
@@ -23,6 +24,7 @@ class RDAPBootstrap:
 
     _instance: ClassVar[RDAPBootstrap] | None = None
     _load_lock: ClassVar[asyncio.Lock | None] = None
+    _breaker: ClassVar[CircuitBreaker] = CircuitBreaker()
 
     def __init__(self) -> None:
         self.data: dict[str, list[str]] = {}
@@ -51,14 +53,18 @@ class RDAPBootstrap:
                     content = await read_limited_response(response, settings.HTTP_MAX_RESPONSE_BYTES)
                 return parse_json(content)
 
-            json_data = await run_with_retries(
-                fetch,
-                retries=settings.RDAP_MAX_RETRIES,
-                should_retry=is_retryable_http_error,
-                backoff_seconds=settings.RETRY_BACKOFF_SECONDS,
-                jitter_seconds=settings.RETRY_JITTER_SECONDS,
-                retry_after=retry_after_seconds,
-                max_delay_seconds=settings.RETRY_MAX_DELAY_SECONDS,
+            json_data = await self._breaker.call(
+                f'rdap-bootstrap:{settings.BOOTSTRAP_URL}',
+                lambda: run_with_retries(
+                    fetch,
+                    retries=settings.RDAP_MAX_RETRIES,
+                    should_retry=is_retryable_http_error,
+                    backoff_seconds=settings.RETRY_BACKOFF_SECONDS,
+                    jitter_seconds=settings.RETRY_JITTER_SECONDS,
+                    retry_after=retry_after_seconds,
+                    max_delay_seconds=settings.RETRY_MAX_DELAY_SECONDS,
+                ),
+                should_trip=is_retryable_http_error,
             )
 
         if not isinstance(json_data, dict) or not isinstance(json_data.get('services'), list):

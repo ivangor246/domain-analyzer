@@ -21,6 +21,8 @@ class SettingsTestCase(unittest.TestCase):
         self.assertEqual(settings.ANALYSIS_CONCURRENCY_MAX_RETRIES, 30)
         self.assertEqual(settings.RETRY_JITTER_SECONDS, 0.1)
         self.assertEqual(settings.RETRY_MAX_DELAY_SECONDS, 30)
+        self.assertEqual(settings.CIRCUIT_BREAKER_FAILURE_THRESHOLD, 3)
+        self.assertEqual(settings.CIRCUIT_BREAKER_RESET_SECONDS, 30)
         self.assertTrue(settings.RATE_LIMIT_REDIS_ENABLED)
         self.assertTrue(settings.RATE_LIMIT_REDIS_FALLBACK_ENABLED)
 

@@ -38,6 +38,8 @@ class Settings(BaseSettings):
     RETRY_BACKOFF_SECONDS: float = Field(default=0.1, ge=0)
     RETRY_JITTER_SECONDS: float = Field(default=0.1, ge=0)
     RETRY_MAX_DELAY_SECONDS: float = Field(default=30, gt=0)
+    CIRCUIT_BREAKER_FAILURE_THRESHOLD: int = Field(default=3, gt=0)
+    CIRCUIT_BREAKER_RESET_SECONDS: float = Field(default=30, gt=0)
     GEOIP_URL: str = 'http://ip-api.com/batch'
     HTTP_USER_AGENT: str = 'Mozilla/5.0 (compatible; DomainAnalyzer/1.0)'
     REDIS_URL: str = 'redis://redis:6379/0'

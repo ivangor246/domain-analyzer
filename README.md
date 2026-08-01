@@ -68,7 +68,7 @@ The current configuration supports:
 - `CELERY_*` — configure worker concurrency, task time limits, logging, and result retention;
 - `ANALYSIS_JOB_TTL_SECONDS` — configure how long queued-analysis metadata remains available in Redis;
 - `ANALYSIS_MAX_CONCURRENCY` and `ANALYSIS_CONCURRENCY_*` — configure the distributed Redis lease, retry delay, and retry limit for active analyses;
-- provider timeouts, retry counts, exponential backoff, jitter, `Retry-After` limits, response-size, redirect, domain, DNS, GeoIP, and RDAP limits.
+- provider timeouts, retry counts, exponential backoff, jitter, `Retry-After` limits, circuit-breaker thresholds, response-size, redirect, domain, DNS, GeoIP, and RDAP limits.
 - `RATE_LIMIT_*` — configure the request window, Redis backend, and local fallback for analysis requests;
 - `CORS_ORIGINS` — configure the explicit frontend origins allowed to call the API.
 

@@ -10,8 +10,10 @@ from app.utils.http import (
     retry_after_seconds,
     run_with_retries,
 )
+from app.utils.circuit_breaker import CircuitBreaker
 
 _FIELDS = 'status,message,country,countryCode,region,regionName,city,zip,lat,lon,timezone,isp,org,as,asname,query'
+geoip_breaker = CircuitBreaker()
 
 
 class GeoIPService:
@@ -30,14 +32,18 @@ class GeoIPService:
                     content = await read_limited_response(response, settings.HTTP_MAX_RESPONSE_BYTES)
                 return parse_json(content)
 
-            data = await run_with_retries(
-                fetch,
-                retries=settings.GEOIP_MAX_RETRIES,
-                should_retry=is_retryable_http_error,
-                backoff_seconds=settings.RETRY_BACKOFF_SECONDS,
-                jitter_seconds=settings.RETRY_JITTER_SECONDS,
-                retry_after=retry_after_seconds,
-                max_delay_seconds=settings.RETRY_MAX_DELAY_SECONDS,
+            data = await geoip_breaker.call(
+                f'geoip:{settings.GEOIP_URL}',
+                lambda: run_with_retries(
+                    fetch,
+                    retries=settings.GEOIP_MAX_RETRIES,
+                    should_retry=is_retryable_http_error,
+                    backoff_seconds=settings.RETRY_BACKOFF_SECONDS,
+                    jitter_seconds=settings.RETRY_JITTER_SECONDS,
+                    retry_after=retry_after_seconds,
+                    max_delay_seconds=settings.RETRY_MAX_DELAY_SECONDS,
+                ),
+                should_trip=is_retryable_http_error,
             )
         if not isinstance(data, list):
             return {}

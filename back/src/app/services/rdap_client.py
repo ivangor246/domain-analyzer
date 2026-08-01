@@ -14,6 +14,7 @@ from app.utils.http import (
     retry_after_seconds,
     run_with_retries,
 )
+from app.utils.circuit_breaker import CircuitOpenError, CircuitBreaker
 
 from .network_guard import NetworkTargetGuard
 
@@ -27,6 +28,9 @@ class RDAPResponse(BaseModel):
     expiration_date: datetime | None = None
     updated_date: datetime | None = None
     whois_server: str | None = None
+
+
+rdap_breaker = CircuitBreaker()
 
 
 class RDAPClient:
@@ -58,6 +62,7 @@ class RDAPClient:
                     continue
 
                 url = f'{parsed_server.geturl().rstrip("/")}/domain/{domain}'
+                provider_key = f'rdap:{parsed_server.geturl().rstrip("/")}'
                 try:
 
                     async def fetch() -> object:
@@ -66,18 +71,24 @@ class RDAPClient:
                             content = await read_limited_response(response, settings.HTTP_MAX_RESPONSE_BYTES)
                         return parse_json(content)
 
-                    data = await run_with_retries(
-                        fetch,
-                        retries=settings.RDAP_MAX_RETRIES,
-                        should_retry=is_retryable_http_error,
-                        backoff_seconds=settings.RETRY_BACKOFF_SECONDS,
-                        jitter_seconds=settings.RETRY_JITTER_SECONDS,
-                        retry_after=retry_after_seconds,
-                        max_delay_seconds=settings.RETRY_MAX_DELAY_SECONDS,
+                    data = await rdap_breaker.call(
+                        provider_key,
+                        lambda: run_with_retries(
+                            fetch,
+                            retries=settings.RDAP_MAX_RETRIES,
+                            should_retry=is_retryable_http_error,
+                            backoff_seconds=settings.RETRY_BACKOFF_SECONDS,
+                            jitter_seconds=settings.RETRY_JITTER_SECONDS,
+                            retry_after=retry_after_seconds,
+                            max_delay_seconds=settings.RETRY_MAX_DELAY_SECONDS,
+                        ),
+                        should_trip=is_retryable_http_error,
                     )
                     if not isinstance(data, dict):
                         continue
                     return RDAPClient._parse(server=server, data=data)
+                except CircuitOpenError:
+                    continue
                 except httpx.HTTPError:
                     continue
                 except (json.JSONDecodeError, ValueError):
