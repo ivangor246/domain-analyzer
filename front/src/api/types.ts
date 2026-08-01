@@ -4,6 +4,14 @@ export interface AnalysisError {
   message: string
 }
 
+export type AnalysisCheckStatus = 'queued' | 'running' | 'successful' | 'partial' | 'failed'
+
+export interface AnalysisProgress {
+  check: string
+  status: AnalysisCheckStatus
+  duration_ms: number | null
+}
+
 export interface MXRecord {
   priority: number
   exchange: string
@@ -165,6 +173,7 @@ export interface AnalysisJob {
   created_at: string
   result: DomainAnalysis | null
   error: ErrorPayload | null
+  progress: AnalysisProgress[]
 }
 
 export interface ErrorDetails {

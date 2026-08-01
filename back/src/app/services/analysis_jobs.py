@@ -17,7 +17,12 @@ from app.core.exceptions import (
     AnalysisQueueError,
     DomainValidationError,
 )
-from app.schemas.analysis import AnalysisJobSchema, AnalysisStatus
+from app.schemas.analysis import (
+    ANALYSIS_CHECKS,
+    AnalysisJobSchema,
+    AnalysisProgressSchema,
+    AnalysisStatus,
+)
 from app.schemas.domain import DomainSchema
 from app.schemas.error import ErrorSchema
 from app.services.analysis_queue import mark_analysis_queued, remove_analysis_from_queue
@@ -67,6 +72,7 @@ class AnalysisRecord:
 class TaskSnapshot:
     state: str
     result: object | None = None
+    meta: object | None = None
 
 
 class AnalysisJobStore(Protocol):
@@ -207,7 +213,8 @@ class CeleryTaskBroker:
         result = self._get_app().AsyncResult(analysis_id)
         state = result.state
         value = result.result if state == 'SUCCESS' else None
-        return TaskSnapshot(state=state, result=value)
+        meta = result.info if state in {'STARTED', 'PROGRESS'} else None
+        return TaskSnapshot(state=state, result=value, meta=meta)
 
     def _revoke_sync(self, analysis_id: str) -> None:
         self._get_app().control.revoke(analysis_id, terminate=True, signal='SIGTERM')
@@ -239,18 +246,52 @@ class AnalysisJobService:
             raise DomainValidationError(str(exc)) from exc
 
     @staticmethod
-    def _job_from_snapshot(record: AnalysisRecord, snapshot: TaskSnapshot) -> AnalysisJobSchema:
+    def _initial_progress() -> list[AnalysisProgressSchema]:
+        return [AnalysisProgressSchema(check=check, status='queued') for check in ANALYSIS_CHECKS]
+
+    @staticmethod
+    def _progress_from_payload(payload: object) -> list[AnalysisProgressSchema]:
+        if not isinstance(payload, dict) or not isinstance(payload.get('progress'), list):
+            return []
+
+        progress: list[AnalysisProgressSchema] = []
+        for item in payload['progress']:
+            try:
+                progress.append(AnalysisProgressSchema.model_validate(item))
+            except (TypeError, ValidationError):
+                continue
+        return progress
+
+    @classmethod
+    def _snapshot_progress(cls, snapshot: TaskSnapshot) -> list[AnalysisProgressSchema]:
+        progress = cls._progress_from_payload(snapshot.meta)
+        if isinstance(snapshot.result, dict):
+            progress = cls._progress_from_payload(snapshot.result) or progress
+        if not progress and snapshot.state in {'PENDING', 'STARTED', 'RETRY', 'PROGRESS'}:
+            return cls._initial_progress()
+        return progress
+
+    @staticmethod
+    def _snapshot_result(snapshot: TaskSnapshot) -> object | None:
+        if isinstance(snapshot.result, dict) and 'analysis' in snapshot.result:
+            return snapshot.result['analysis']
+        return snapshot.result
+
+    @classmethod
+    def _job_from_snapshot(cls, record: AnalysisRecord, snapshot: TaskSnapshot) -> AnalysisJobSchema:
+        progress = cls._snapshot_progress(snapshot)
         if record.cancelled or snapshot.state == 'REVOKED':
             return AnalysisJobSchema(
                 id=record.analysis_id,
                 domain=record.domain,
                 status=AnalysisStatus.CANCELLED,
                 created_at=record.created_at,
+                progress=progress,
             )
 
         if snapshot.state == 'SUCCESS':
             try:
-                result = DomainSchema.model_validate(snapshot.result)
+                result = DomainSchema.model_validate(cls._snapshot_result(snapshot))
             except (TypeError, ValidationError):
                 return AnalysisJobSchema(
                     id=record.analysis_id,
@@ -258,6 +299,7 @@ class AnalysisJobService:
                     status=AnalysisStatus.FAILED,
                     created_at=record.created_at,
                     error=ErrorSchema(code='invalid_analysis_result', message='The analysis result is invalid.'),
+                    progress=progress,
                 )
             return AnalysisJobSchema(
                 id=record.analysis_id,
@@ -265,6 +307,7 @@ class AnalysisJobService:
                 status=AnalysisStatus.COMPLETED,
                 created_at=record.created_at,
                 result=result,
+                progress=progress,
             )
 
         if snapshot.state == 'FAILURE':
@@ -274,6 +317,7 @@ class AnalysisJobService:
                 status=AnalysisStatus.FAILED,
                 created_at=record.created_at,
                 error=ErrorSchema(code='analysis_failed', message='Domain analysis failed.'),
+                progress=progress,
             )
 
         status = AnalysisStatus.RUNNING if snapshot.state in {'STARTED', 'RETRY', 'PROGRESS'} else AnalysisStatus.QUEUED
@@ -282,6 +326,7 @@ class AnalysisJobService:
             domain=record.domain,
             status=status,
             created_at=record.created_at,
+            progress=progress,
         )
 
     async def create(
@@ -335,6 +380,7 @@ class AnalysisJobService:
             domain=record.domain,
             status=AnalysisStatus.QUEUED,
             created_at=record.created_at,
+            progress=self._initial_progress(),
         )
 
     async def get(self, analysis_id: str) -> AnalysisJobSchema:
@@ -380,4 +426,5 @@ class AnalysisJobService:
             domain=record.domain,
             status=AnalysisStatus.CANCELLED,
             created_at=record.created_at,
+            progress=self._snapshot_progress(snapshot),
         )

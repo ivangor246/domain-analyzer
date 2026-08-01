@@ -104,11 +104,20 @@ class DomainServiceTestCase(unittest.IsolatedAsyncioTestCase):
             network_guard=FakeGuard,
         )
 
-        result = await DomainService(dependencies).analyze('example.com')
+        progress: list[tuple[str, str, float | None]] = []
+
+        async def on_progress(check: str, status: str, duration_ms: float | None = None) -> None:
+            progress.append((check, status, duration_ms))
+
+        result = await DomainService(dependencies).analyze('example.com', progress_callback=on_progress)
 
         self.assertEqual(result.dns.A, ['8.8.8.8'])
         self.assertIsNone(result.rdap_server)
         self.assertEqual({error.check for error in result.analysis_errors}, {'rdap'})
+        latest_status = {check: status for check, status, _duration_ms in progress}
+        self.assertEqual(latest_status['rdap'], 'failed')
+        self.assertEqual(latest_status['dns'], 'successful')
+        self.assertEqual(latest_status['geoip'], 'successful')
 
     async def test_global_deadline_preserves_partial_results(self) -> None:
         dependencies = DomainDependencies(

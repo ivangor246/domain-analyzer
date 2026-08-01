@@ -13,6 +13,7 @@ function job(overrides: Partial<AnalysisJob> = {}): AnalysisJob {
     created_at: '2026-08-01T10:00:00Z',
     result: null,
     error: null,
+    progress: [],
     ...overrides,
   }
 }
@@ -129,6 +130,24 @@ describe('analyzeDomain', () => {
           created_at: '2026-08-01T10:00:00Z',
           result: null,
           error: null,
+        }),
+      ),
+    )
+
+    await expect(getAnalysis(analysisId)).rejects.toMatchObject({
+      name: 'ApiError',
+      status: 200,
+      code: 'invalid_response',
+    })
+  })
+
+  it('rejects malformed check progress in an asynchronous job response', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        jsonResponse({
+          ...job({ status: 'running' }),
+          progress: [{ check: 'dns', status: 'unknown', duration_ms: null }],
         }),
       ),
     )

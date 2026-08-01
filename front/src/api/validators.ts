@@ -1,5 +1,6 @@
 import type {
   AnalysisError,
+  AnalysisProgress,
   AnalysisJob,
   CAARecord,
   DNSData,
@@ -85,6 +86,19 @@ function isAnalysisError(value: unknown): value is AnalysisError {
     isString(value.check) &&
     isString(value.code) &&
     isString(value.message)
+  )
+}
+
+function isAnalysisProgress(value: unknown): value is AnalysisProgress {
+  return (
+    isRecord(value) &&
+    isString(value.check) &&
+    (value.status === 'queued' ||
+      value.status === 'running' ||
+      value.status === 'successful' ||
+      value.status === 'partial' ||
+      value.status === 'failed') &&
+    isNullable(value.duration_ms, isFiniteNumber)
   )
 }
 
@@ -296,6 +310,7 @@ export function isAnalysisJob(value: unknown): value is AnalysisJob {
       value.status === 'cancelled') &&
     isDateString(value.created_at) &&
     isNullable(value.result, isDomainAnalysis) &&
-    isNullable(value.error, isErrorPayload)
+    isNullable(value.error, isErrorPayload) &&
+    isArrayOf(value.progress, isAnalysisProgress)
   )
 }

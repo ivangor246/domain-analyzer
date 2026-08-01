@@ -172,7 +172,7 @@ The response contains an analysis identifier and starts in the `queued` state. P
 curl 'http://localhost:8000/api/analyses/<analysis-id>'
 ```
 
-The status changes through `queued`, `running`, and a terminal `completed`, `failed`, or `cancelled` state. A queued or running job can be cancelled with `POST /api/analyses/<analysis-id>/cancel`. Job metadata and Celery results expire automatically; PostgreSQL is not required for this workflow.
+The status changes through `queued`, `running`, and a terminal `completed`, `failed`, or `cancelled` state. While a job is queued or running, its `progress` array reports each check as `queued`, `running`, `successful`, `partial`, or `failed`, with a duration when the check has finished. A queued or running job can be cancelled with `POST /api/analyses/<analysis-id>/cancel`. Job metadata and Celery results expire automatically; PostgreSQL is not required for this workflow.
 
 Active analyses use a Redis-backed distributed concurrency limit. When all slots are occupied, Celery retries queued tasks after `ANALYSIS_CONCURRENCY_RETRY_SECONDS`; after `ANALYSIS_CONCURRENCY_MAX_RETRIES` attempts the job becomes failed. Leases expire automatically after `ANALYSIS_CONCURRENCY_LEASE_SECONDS`, which must be longer than `ANALYSIS_TIMEOUT_SECONDS`.
 

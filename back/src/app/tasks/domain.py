@@ -8,6 +8,7 @@ from app.core.celery_app import celery_app
 from app.core.config import settings
 from app.core.logging_config import correlation_context
 from app.core.metrics import record_job
+from app.schemas.analysis import ANALYSIS_CHECKS
 from app.services.analysis_concurrency import (
     AnalysisConcurrencyBusyError,
     AnalysisConcurrencyUnavailableError,
@@ -27,6 +28,41 @@ def _request_id_from_task(task: Any) -> str | None:
     return request_id if isinstance(request_id, str) else None
 
 
+class TaskProgressReporter:
+    def __init__(self, task: Any) -> None:
+        self.task = task
+        self._lock = asyncio.Lock()
+        self._progress: dict[str, dict[str, object]] = {
+            check: {'check': check, 'status': 'queued', 'duration_ms': None} for check in ANALYSIS_CHECKS
+        }
+
+    def snapshot(self) -> list[dict[str, object]]:
+        return [dict(self._progress[check]) for check in ANALYSIS_CHECKS]
+
+    async def _publish(self, progress: list[dict[str, object]]) -> None:
+        try:
+            await asyncio.to_thread(
+                self.task.update_state,
+                state='PROGRESS',
+                meta={'progress': progress},
+            )
+        except asyncio.CancelledError:
+            raise
+        except Exception:
+            logger.warning('analysis progress publication failed')
+
+    async def publish_initial(self) -> None:
+        await self._publish(self.snapshot())
+
+    async def report(self, check: str, status: str, duration_ms: float | None = None) -> None:
+        async with self._lock:
+            updated = {'check': check, 'status': status, 'duration_ms': duration_ms}
+            if self._progress.get(check) == updated:
+                return
+            self._progress[check] = updated
+            await self._publish(self.snapshot())
+
+
 @celery_app.task(bind=True, name='app.tasks.domain.analyze_domain_task')
 def analyze_domain_task(task, domain: str) -> dict[str, Any]:
     task_id = task.request.id
@@ -36,15 +72,25 @@ def analyze_domain_task(task, domain: str) -> dict[str, Any]:
         outcome = 'failed'
         logger.info('analysis task started', extra={'domain': domain})
         try:
-            result = asyncio.run(
-                run_with_concurrency_limit(
+
+            async def run_analysis() -> tuple[dict[str, Any], list[dict[str, object]]]:
+                reporter = TaskProgressReporter(task)
+                await reporter.publish_initial()
+                result = await run_with_concurrency_limit(
                     task_id,
-                    lambda: DomainService().analyze(domain, analysis_id=task_id, task_id=task_id),
+                    lambda: DomainService().analyze(
+                        domain,
+                        analysis_id=task_id,
+                        task_id=task_id,
+                        progress_callback=reporter.report,
+                    ),
                     on_acquired=lambda: mark_analysis_started(task_id),
                 )
-            )
+                return result.model_dump(mode='json'), reporter.snapshot()
+
+            result, progress = asyncio.run(run_analysis())
             outcome = 'completed'
-            return result.model_dump(mode='json')
+            return {'analysis': result, 'progress': progress}
         except (AnalysisConcurrencyBusyError, AnalysisConcurrencyUnavailableError) as exc:
             outcome = 'retry'
             raise task.retry(

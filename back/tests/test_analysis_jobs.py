@@ -111,15 +111,48 @@ class AnalysisJobServiceTestCase(unittest.IsolatedAsyncioTestCase):
         job = await self.service.create('example.com')
 
         self.broker.snapshots[job.id] = TaskSnapshot(state='STARTED')
-        self.assertEqual((await self.service.get(job.id)).status, AnalysisStatus.RUNNING)
+        running = await self.service.get(job.id)
+        self.assertEqual(running.status, AnalysisStatus.RUNNING)
+        self.assertEqual(
+            {item.check for item in running.progress},
+            {
+                'rdap',
+                'dns',
+                'dns_propagation',
+                'geoip',
+                'http',
+                'ssl',
+                'ports',
+                'latency',
+            },
+        )
 
         self.broker.snapshots[job.id] = TaskSnapshot(
             state='SUCCESS',
-            result={'domain': 'example.com'},
+            result={
+                'analysis': {'domain': 'example.com'},
+                'progress': [
+                    {'check': 'dns', 'status': 'successful', 'duration_ms': 12.5},
+                ],
+            },
         )
         completed = await self.service.get(job.id)
         self.assertEqual(completed.status, AnalysisStatus.COMPLETED)
         self.assertIsNotNone(completed.result)
+        self.assertEqual(completed.progress[0].check, 'dns')
+        self.assertEqual(completed.progress[0].duration_ms, 12.5)
+
+        self.broker.snapshots[job.id] = TaskSnapshot(
+            state='PROGRESS',
+            meta={
+                'progress': [
+                    {'check': 'dns', 'status': 'running', 'duration_ms': None},
+                ],
+            },
+        )
+        progress = await self.service.get(job.id)
+        self.assertEqual(progress.status, AnalysisStatus.RUNNING)
+        self.assertEqual(progress.progress[0].status.value, 'running')
 
         self.broker.snapshots[job.id] = TaskSnapshot(state='PENDING')
         cancelled = await self.service.cancel(job.id)
