@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { analyzeDomain, ApiError } from './client'
+import { analyzeDomain } from './client'
 
 describe('analyzeDomain', () => {
   beforeEach(() => {
@@ -25,7 +25,7 @@ describe('analyzeDomain', () => {
     )
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(response))
 
-    await expect(analyzeDomain('invalid')).rejects.toMatchObject<ApiError>({
+    await expect(analyzeDomain('invalid')).rejects.toMatchObject({
       name: 'ApiError',
       status: 400,
       code: 'invalid_domain',
