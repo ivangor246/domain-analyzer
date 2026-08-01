@@ -1,0 +1,48 @@
+name: Frontend
+
+on:
+  push:
+    paths:
+      - 'front/**'
+      - 'Makefile'
+      - '.github/workflows/frontend.yml'
+  pull_request:
+    paths:
+      - 'front/**'
+      - 'Makefile'
+      - '.github/workflows/frontend.yml'
+
+jobs:
+  quality:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: front/package-lock.json
+
+      - name: Install frontend dependencies
+        working-directory: front
+        run: npm ci
+
+      - name: Check types
+        working-directory: front
+        run: npm run typecheck
+
+      - name: Check lint
+        working-directory: front
+        run: npm run lint
+
+      - name: Run tests
+        working-directory: front
+        run: npm run test
+
+      - name: Build frontend
+        working-directory: front
+        run: npm run build

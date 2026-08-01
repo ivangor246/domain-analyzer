@@ -43,6 +43,9 @@ front-dev:
 front-build:
 	npm --prefix $(FRONTEND_DIR) run build
 
+front-image:
+	docker build --build-arg VITE_API_URL=http://localhost:8000 -t domain-analyzer-front $(FRONTEND_DIR)
+
 front-lint:
 	npm --prefix $(FRONTEND_DIR) run lint
 

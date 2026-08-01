@@ -174,3 +174,10 @@ make front-lint
 make front-test
 make front-build
 ```
+
+Build the frontend as a standalone production container:
+
+```bash
+docker build --build-arg VITE_API_URL=http://localhost:8000 -t domain-analyzer-front ./front
+docker run --rm -p 4173:80 domain-analyzer-front
+```
