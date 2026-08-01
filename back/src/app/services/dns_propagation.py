@@ -4,14 +4,14 @@ import dns.asyncresolver
 import dns.exception
 import dns.resolver
 
-from app.core.config import config
+from app.core.config import settings
 from app.schemas.dns import PropagationSchema, PropagationServerSchema
 
 
 class DNSPropagation:
     @staticmethod
     async def check(domain: str) -> PropagationSchema:
-        tasks = [DNSPropagation._query_server(domain, s['name'], s['ip']) for s in config.PROPAGATION_SERVERS]
+        tasks = [DNSPropagation._query_server(domain, s['name'], s['ip']) for s in settings.PROPAGATION_SERVERS]
         servers = list(await asyncio.gather(*tasks))
 
         ok_servers = [s for s in servers if s.status == 'ok']

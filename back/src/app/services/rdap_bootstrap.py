@@ -4,7 +4,7 @@ from typing import ClassVar
 
 import httpx
 
-from app.core.config import config
+from app.core.config import settings
 
 
 class RDAPBootstrap:
@@ -28,7 +28,7 @@ class RDAPBootstrap:
 
     async def load(self):
         async with httpx.AsyncClient(timeout=10) as client:
-            response = await client.get(config.BOOTSTRAP_URL)
+            response = await client.get(settings.BOOTSTRAP_URL)
             response.raise_for_status()
             json_data = response.json()
 
@@ -50,6 +50,6 @@ class RDAPBootstrap:
         for n in range(len(labels) - 1, 0, -1):
             tld = '.'.join(labels[n:]).lower()
             if tld in self.data:
-                rdap_domain = '.'.join(labels[n - 1:])
+                rdap_domain = '.'.join(labels[n - 1 :])
                 return self.data[tld], rdap_domain
         raise ValueError(f'No RDAP server for domain: {domain}')

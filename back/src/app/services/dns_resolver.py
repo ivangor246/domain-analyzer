@@ -6,7 +6,7 @@ import dns.rdatatype
 import dns.reversename
 from pydantic import BaseModel
 
-from app.core.config import config
+from app.core.config import settings
 
 
 class DNSRecords(BaseModel):
@@ -28,7 +28,7 @@ class DNSResolver:
     async def resolve(domain: str) -> DNSRecords:
         resolver = dns.asyncresolver.Resolver()
         resolver.lifetime = 5
-        resolver.nameservers = config.DNS_SERVERS
+        resolver.nameservers = settings.DNS_SERVERS
 
         tasks = {rtype: DNSResolver._query(resolver, domain, rtype) for rtype in DNSResolver.RECORD_TYPES}
 

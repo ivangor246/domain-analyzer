@@ -52,10 +52,13 @@ Create the local environment file before running the backend:
 cp back/.env.example back/.env
 ```
 
+The settings model loads `.env` when the command is run from `back/` and `back/.env` when it is run from the repository root. Production-safe defaults are used when a value is not provided.
+
 The current configuration supports:
 
 - `DOCS=True` — enables the OpenAPI, Swagger UI, and ReDoc endpoints;
-- `DEV_MODE=True` — enables development behavior when running through Compose.
+- `DEV_MODE=True` — enables development behavior when running through Compose;
+- `TITLE` — customizes the service title shown by FastAPI.
 
 Do not commit `back/.env` or place secrets in the repository.
 

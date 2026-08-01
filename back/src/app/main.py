@@ -16,7 +16,7 @@ from app.api.errors import (
     unexpected_error_handler,
 )
 from app.api.root import root_router
-from app.core.config import config
+from app.core.config import settings
 from app.core.exceptions import AppError
 from app.core.logging_config import configure_logging, request_id_context
 
@@ -29,15 +29,15 @@ async def lifespan(app: FastAPI):
 
 
 def create_app() -> FastAPI:
-    configure_logging(debug=config.DEBUG)
+    configure_logging(debug=settings.DEV_MODE)
 
     app = FastAPI(
-        title=config.TITLE,
-        docs_url=config.DOCS_URL,
-        openapi_url=config.OPENAPI_URL,
-        redoc_url=config.REDOC_URL,
+        title=settings.TITLE,
+        docs_url=settings.DOCS_URL,
+        openapi_url=settings.OPENAPI_URL,
+        redoc_url=settings.REDOC_URL,
         lifespan=lifespan,
-        debug=config.DEBUG,
+        debug=settings.DEV_MODE,
     )
 
     app.add_exception_handler(AppError, app_error_handler)
