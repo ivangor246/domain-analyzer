@@ -4,6 +4,13 @@ services:
     command: redis-server --appendonly yes
     volumes:
       - redis_data:/data
+    cap_drop:
+      - ALL
+    init: true
+    mem_limit: 256m
+    pids_limit: 128
+    security_opt:
+      - no-new-privileges:true
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 5s
@@ -14,13 +21,23 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+    cap_drop:
+      - ALL
     env_file:
       - .env
     environment:
       DEV_MODE: ${DEV_MODE:-False} # Set to True by make dev
       REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
+    init: true
+    mem_limit: 768m
     ports:
       - 8000:8000
+    pids_limit: 256
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+    tmpfs:
+      - /tmp:size=64m,mode=1777,noexec,nosuid
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/health', timeout=2)"]
       interval: 10s
@@ -39,15 +56,25 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+    cap_drop:
+      - ALL
     command: ["worker"]
     env_file:
       - .env
     environment:
       DEV_MODE: "False"
       REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
+    init: true
+    mem_limit: 768m
     depends_on:
       redis:
         condition: service_healthy
+    pids_limit: 256
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+    tmpfs:
+      - /tmp:size=64m,mode=1777,noexec,nosuid
     develop:
       watch:
         - action: sync

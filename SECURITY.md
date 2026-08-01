@@ -20,6 +20,8 @@ Do not include secrets, personal data, or live target data in a report.
 ## Operational boundaries
 
 - Keep `back/.env` and production secrets outside Git.
+- Build the backend from `back/`; its Docker build context excludes `.env` files, local environments, tests, and caches.
+- Keep the backend API and worker containers non-root with read-only filesystems, dropped Linux capabilities, no-new-privileges, and explicit memory/PID limits.
 - Configure exact trusted frontend origins through `CORS_ORIGINS`.
 - Put authentication, TLS termination, request filtering, and a shared rate limiter in front of the API before public deployment.
 - Keep the in-memory rate limiter enabled even when a gateway also applies limits.

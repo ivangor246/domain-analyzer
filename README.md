@@ -229,6 +229,8 @@ The backend and frontend are deployed independently. The backend image is built 
 
 Before a public deployment:
 
+- build the backend from `back/` so its `.dockerignore` excludes local environment files and secrets;
+- keep the backend API and worker containers non-root and retain their read-only filesystem, dropped capabilities, no-new-privileges setting, and resource limits unless the deployment requires an explicit override;
 - set `CORS_ORIGINS` to exact trusted frontend origins;
 - place authentication, TLS termination, and a shared rate limiter at the edge because the application limiter is per process;
 - keep `DOCS=False` unless API documentation is intentionally exposed;
