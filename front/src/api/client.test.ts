@@ -197,4 +197,18 @@ describe('analyzeDomain', () => {
     expect(statuses).toEqual(['queued', 'running', 'completed'])
     expect(fetchMock).toHaveBeenCalledTimes(3)
   })
+
+  it('stops polling when the request is cancelled', async () => {
+    const controller = new AbortController()
+    const fetchMock = vi.fn().mockImplementation(async () => {
+      controller.abort()
+      return jsonResponse(job({ status: 'running' }))
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    await expect(pollAnalysis(analysisId, controller.signal, undefined, 0)).rejects.toMatchObject({
+      name: 'AbortError',
+    })
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+  })
 })
