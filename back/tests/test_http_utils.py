@@ -1,3 +1,4 @@
+import asyncio
 import unittest
 from unittest.mock import AsyncMock, patch
 
@@ -47,6 +48,32 @@ class HTTPUtilsTests(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual(result, 'ok')
         self.assertEqual(operation.await_count, 2)
+
+    async def test_run_with_retries_retries_timeout(self):
+        operation = AsyncMock(side_effect=[httpx.ReadTimeout('temporary timeout'), 'ok'])
+
+        result = await run_with_retries(
+            operation,
+            retries=1,
+            should_retry=is_retryable_http_error,
+            backoff_seconds=0,
+        )
+
+        self.assertEqual(result, 'ok')
+        self.assertEqual(operation.await_count, 2)
+
+    async def test_run_with_retries_propagates_cancellation_without_retrying(self):
+        operation = AsyncMock(side_effect=asyncio.CancelledError())
+
+        with self.assertRaises(asyncio.CancelledError):
+            await run_with_retries(
+                operation,
+                retries=3,
+                should_retry=lambda _exc: True,
+                backoff_seconds=0,
+            )
+
+        operation.assert_awaited_once()
 
     async def test_run_with_retries_honors_retry_after_and_adds_jitter(self):
         request = httpx.Request('GET', 'https://provider.example')

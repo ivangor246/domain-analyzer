@@ -1,3 +1,4 @@
+import asyncio
 import unittest
 from unittest.mock import AsyncMock
 
@@ -29,6 +30,27 @@ class CircuitBreakerTestCase(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual(await breaker.call('provider', recovered), 'ok')
         self.assertFalse(await breaker.is_open('provider'))
+
+    async def test_cancelled_half_open_probe_releases_probe_slot(self) -> None:
+        breaker = CircuitBreaker(failure_threshold=1, reset_seconds=0)
+        failed = AsyncMock(side_effect=ConnectionError('provider unavailable'))
+
+        with self.assertRaises(ConnectionError):
+            await breaker.call('provider', failed)
+
+        started = asyncio.Event()
+
+        async def blocked_operation() -> None:
+            started.set()
+            await asyncio.Event().wait()
+
+        task = asyncio.create_task(breaker.call('provider', blocked_operation))
+        await started.wait()
+        task.cancel()
+        with self.assertRaises(asyncio.CancelledError):
+            await task
+
+        self.assertEqual(await breaker.call('provider', AsyncMock(return_value='ok')), 'ok')
 
     async def test_non_transient_errors_do_not_open_the_circuit(self) -> None:
         breaker = CircuitBreaker(failure_threshold=1, reset_seconds=30)

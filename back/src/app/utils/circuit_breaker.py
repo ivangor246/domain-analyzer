@@ -59,6 +59,12 @@ class CircuitBreaker:
             if state.opened_at is not None or state.failures >= self.failure_threshold:
                 state.opened_at = now
 
+    async def _release_probe(self, key: str) -> None:
+        async with self._lock:
+            state = self._states.get(key)
+            if state is not None:
+                state.probe_in_flight = False
+
     async def call(
         self,
         key: str,
@@ -69,6 +75,7 @@ class CircuitBreaker:
         try:
             result = await operation()
         except asyncio.CancelledError:
+            await self._release_probe(key)
             raise
         except Exception as exc:
             if should_trip is None or should_trip(exc):
