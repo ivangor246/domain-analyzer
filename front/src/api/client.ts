@@ -1,4 +1,4 @@
-import type { AnalysisJob, AnalysisJobStatus, DomainAnalysis, ErrorPayload } from './types'
+import type { AnalysisCreate, AnalysisJob, AnalysisJobStatus, DomainAnalysis, ErrorPayload } from './types'
 import { isAnalysisJob, isDomainAnalysis, isErrorPayload } from './validators'
 
 const API_URL = (import.meta.env.VITE_API_URL || 'http://localhost:8000').replace(/\/+$/, '')
@@ -62,6 +62,7 @@ function idempotencyKey() {
 }
 
 export async function createAnalysis(domain: string): Promise<AnalysisJob> {
+  const payload: AnalysisCreate = { domain }
   return requestJson<AnalysisJob>(`${API_URL}/api/analyses`, {
     method: 'POST',
     headers: {
@@ -69,7 +70,7 @@ export async function createAnalysis(domain: string): Promise<AnalysisJob> {
       'Content-Type': 'application/json',
       'Idempotency-Key': idempotencyKey(),
     },
-    body: JSON.stringify({ domain }),
+    body: JSON.stringify(payload),
   }, isAnalysisJob)
 }
 

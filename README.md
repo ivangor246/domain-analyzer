@@ -220,6 +220,14 @@ make front-test
 make front-build
 ```
 
+Frontend API types are generated from the backend OpenAPI schema. After backend schema changes, regenerate them with:
+
+```bash
+make api-types
+```
+
+The command uses the FastAPI application directly and writes `front/src/api/generated.ts`. It requires backend dependencies to be installed with Poetry. For a running instance with `DOCS=True`, the frontend-only command can read the published schema with `OPENAPI_INPUT=http://localhost:8000/api/docs.json npm --prefix front run api:types`.
+
 Run the backend and worker health smoke test through Compose after creating `back/.env`:
 
 ```bash

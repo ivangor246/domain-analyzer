@@ -7,6 +7,7 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
+    "api:types": "node scripts/generate-api-types.mjs",
     "preview": "vite preview",
     "test": "vitest run",
     "test:watch": "vitest",

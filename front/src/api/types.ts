@@ -1,193 +1,68 @@
-export interface AnalysisError {
-  check: string
-  code: string
-  message: string
-}
+import type { components } from './generated'
 
-export type AnalysisMetadataStatus = 'successful' | 'failed' | 'timeout' | 'cancelled'
+type Schemas = components['schemas']
 
-export interface AnalysisCheckMetadata {
-  status: AnalysisMetadataStatus
-  completed_at: string
-  duration_ms: number
-  sources: string[]
-}
+type RequiredSchema<T> = T extends null | undefined
+  ? T
+  : T extends readonly (infer Item)[]
+    ? Array<RequiredSchema<Item>>
+    : T extends object
+      ? { [Key in keyof T]-?: RequiredSchema<Exclude<T[Key], undefined>> }
+      : T
 
-export interface AnalysisMetadata {
-  started_at: string
-  completed_at: string
-  duration_ms: number
-  checks: Record<string, AnalysisCheckMetadata>
-}
+export type AnalysisError = RequiredSchema<Schemas['AnalysisError']>
 
-export type AnalysisCheckStatus = 'queued' | 'running' | 'successful' | 'partial' | 'failed'
+export type AnalysisMetadataStatus = Schemas['AnalysisCheckMetadata']['status']
 
-export interface AnalysisProgress {
-  check: string
-  status: AnalysisCheckStatus
-  duration_ms: number | null
-}
+export type AnalysisCheckMetadata = RequiredSchema<Schemas['AnalysisCheckMetadata']>
 
-export interface MXRecord {
-  priority: number
-  exchange: string
-}
+export type AnalysisMetadata = RequiredSchema<Schemas['AnalysisMetadata']>
 
-export interface SOARecord {
-  mname: string
-  rname: string
-  serial: number
-  refresh: number
-  retry: number
-  expire: number
-  minimum: number
-}
+export type AnalysisCheckStatus = Schemas['AnalysisCheckStatus']
 
-export interface CAARecord {
-  flags: number
-  tag: string
-  value: string
-}
+export type AnalysisProgress = RequiredSchema<Schemas['AnalysisProgressSchema']>
 
-export interface PropagationServer {
-  name: string
-  ip: string
-  A: string[]
-  AAAA: string[]
-  status: 'ok' | 'timeout' | 'error'
-}
+export type AnalysisCreate = RequiredSchema<Schemas['AnalysisCreateSchema']>
 
-export interface Propagation {
-  consistent: boolean
-  servers: PropagationServer[]
-}
+export type MXRecord = RequiredSchema<Schemas['MXRecord']>
 
-export interface DNSData {
-  A: string[]
-  AAAA: string[]
-  MX: MXRecord[]
-  TXT: string[]
-  CNAME: string[]
-  NS: string[]
-  SOA: SOARecord | null
-  CAA: CAARecord[]
-  PTR: Record<string, string | null>
-  propagation: Propagation | null
-}
+export type SOARecord = RequiredSchema<Schemas['SOARecord']>
 
-export interface GeoIPRecord {
-  ip: string
-  country: string | null
-  country_code: string | null
-  region: string | null
-  city: string | null
-  zip: string | null
-  lat: number | null
-  lon: number | null
-  timezone: string | null
-  isp: string | null
-  org: string | null
-  asn: string | null
-  asn_name: string | null
-}
+export type CAARecord = RequiredSchema<Schemas['CAARecord']>
 
-export interface HTTPProbeResult {
-  reachable: boolean
-  status_code: number | null
-  final_url: string | null
-  redirect_chain: string[]
-  response_time_ms: number | null
-  server: string | null
-  x_powered_by: string | null
-  via: string | null
-  content_type: string | null
-  cache_control: string | null
-  content_security_policy: string | null
-  strict_transport_security: string | null
-  x_frame_options: string | null
-  x_content_type_options: string | null
-  referrer_policy: string | null
-  permissions_policy: string | null
-}
+export type PropagationServer = RequiredSchema<Schemas['PropagationServerSchema']>
 
-export interface HTTPData {
-  http: HTTPProbeResult | null
-  https: HTTPProbeResult | null
-}
+export type Propagation = RequiredSchema<Schemas['PropagationSchema']>
 
-export interface SSLCertificate {
-  subject: string | null
-  san: string[]
-  issuer: string | null
-  issuer_org: string | null
-  valid_from: string | null
-  valid_until: string | null
-  days_remaining: number | null
-  expired: boolean
-  serial_number: string | null
-  fingerprint_sha256: string | null
-  signature_algorithm: string | null
-  version: number | null
-}
+export type DNSData = RequiredSchema<Schemas['DNSSchema']>
 
-export interface SSLData {
-  valid: boolean
-  error: string | null
-  protocol: string | null
-  cipher: string | null
-  certificate: SSLCertificate | null
-}
+export type GeoIPRecord = RequiredSchema<Schemas['GeoIPRecord']>
 
-export interface PortResult {
-  port: number
-  open: boolean
-  status: 'open' | 'closed' | 'filtered'
-  service: string | null
-}
+export type HTTPProbeResult = RequiredSchema<Schemas['HTTPProbeResult']>
 
-export interface PortsData {
-  results: PortResult[]
-}
+export type HTTPData = RequiredSchema<Schemas['HTTPSchema']>
 
-export interface LatencyResult {
-  min_ms: number
-  avg_ms: number
-  max_ms: number
-  loss: number
-}
+export type SSLCertificate = RequiredSchema<Schemas['SSLCertificate']>
 
-export interface LatencyData {
-  tcp_80: LatencyResult | null
-  tcp_443: LatencyResult | null
-}
+export type SSLData = RequiredSchema<Schemas['SSLSchema']>
 
-export interface DomainAnalysis {
-  domain: string
-  rdap_server: string | null
-  status: string[]
-  nameservers: string[]
-  registrar: string | null
-  registration_date: string | null
-  expiration_date: string | null
-  updated_date: string | null
-  whois_server: string | null
-  dns: DNSData
-  geoip: Record<string, GeoIPRecord>
-  http: HTTPData | null
-  ssl: SSLData | null
-  ports: PortsData | null
-  latency: LatencyData | null
+export type PortResult = RequiredSchema<Schemas['PortResult']>
+
+export type PortsData = RequiredSchema<Schemas['PortsSchema']>
+
+export type LatencyResult = RequiredSchema<Schemas['LatencyResult']>
+
+export type LatencyData = RequiredSchema<Schemas['LatencySchema']>
+
+export type DomainAnalysis = RequiredSchema<Omit<Schemas['DomainSchema'], 'metadata'>> & {
   metadata?: AnalysisMetadata | null
-  analysis_errors: AnalysisError[]
 }
 
-export type AnalysisJobStatus = 'queued' | 'running' | 'completed' | 'failed' | 'cancelled'
+export type AnalysisJobStatus = Schemas['AnalysisStatus']
 
-export interface AnalysisJob {
-  id: string
-  domain: string
-  status: AnalysisJobStatus
-  created_at: string
+type GeneratedAnalysisJob = RequiredSchema<Omit<Schemas['AnalysisJobSchema'], 'result' | 'error' | 'progress'>>
+
+export interface AnalysisJob extends GeneratedAnalysisJob {
   result: DomainAnalysis | null
   error: ErrorPayload | null
   progress: AnalysisProgress[]
@@ -199,8 +74,6 @@ export interface ErrorDetails {
   [key: string]: unknown
 }
 
-export interface ErrorPayload {
-  code: string
-  message: string
-  details?: ErrorDetails[]
+export type ErrorPayload = Omit<Schemas['ErrorSchema'], 'details'> & {
+  details?: ErrorDetails[] | null
 }
