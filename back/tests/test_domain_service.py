@@ -1,5 +1,9 @@
+import asyncio
 import unittest
+from unittest.mock import patch
 
+from app.core.config import settings
+from app.core.exceptions import AnalysisTimeoutError
 from app.schemas.dns import PropagationSchema
 from app.schemas.http import HTTPSchema
 from app.schemas.latency import LatencySchema
@@ -13,6 +17,12 @@ class FakeGuard:
     @staticmethod
     async def validate(host: str) -> None:
         return None
+
+
+class SlowGuard:
+    @staticmethod
+    async def validate(host: str) -> None:
+        await asyncio.sleep(1)
 
 
 class FakeBootstrap:
@@ -33,6 +43,13 @@ class FakeRDAP:
 class FakeDNS:
     @staticmethod
     async def resolve(domain: str) -> DNSRecords:
+        return DNSRecords(A=['8.8.8.8'])
+
+
+class SlowDNS:
+    @staticmethod
+    async def resolve(domain: str) -> DNSRecords:
+        await asyncio.sleep(1)
         return DNSRecords(A=['8.8.8.8'])
 
 
@@ -92,3 +109,30 @@ class DomainServiceTestCase(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result.dns.A, ['8.8.8.8'])
         self.assertIsNone(result.rdap_server)
         self.assertEqual({error.check for error in result.analysis_errors}, {'rdap'})
+
+    async def test_global_deadline_preserves_partial_results(self) -> None:
+        dependencies = DomainDependencies(
+            rdap_bootstrap=FakeBootstrap,
+            rdap_client=FakeRDAP,
+            dns_resolver=SlowDNS,
+            dns_propagation=FakePropagation,
+            geoip_service=FakeGeoIP,
+            http_service=FakeHTTP,
+            ssl_service=FakeSSL,
+            port_scanner=FakePorts,
+            latency_service=FakeLatency,
+            network_guard=FakeGuard,
+        )
+
+        with patch.object(settings, 'ANALYSIS_TIMEOUT_SECONDS', 0.01):
+            result = await DomainService(dependencies).analyze('example.com')
+
+        self.assertEqual(result.dns.A, [])
+        self.assertIn('dns_timeout', {error.code for error in result.analysis_errors})
+
+    async def test_global_deadline_rejects_target_validation_timeout(self) -> None:
+        dependencies = DomainDependencies(network_guard=SlowGuard)
+
+        with patch.object(settings, 'ANALYSIS_TIMEOUT_SECONDS', 0.01):
+            with self.assertRaises(AnalysisTimeoutError):
+                await DomainService(dependencies).analyze('example.com')

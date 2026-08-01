@@ -1,10 +1,11 @@
 import asyncio
 import logging
 from dataclasses import dataclass
+from time import perf_counter
 from typing import Any, Awaitable, TypeVar
 
-from app.core.exceptions import DomainValidationError
 from app.core.config import settings
+from app.core.exceptions import AnalysisTimeoutError, DomainValidationError
 from app.schemas.dns import DNSSchema, PropagationSchema
 from app.schemas.domain import AnalysisError, DomainSchema
 from app.schemas.geoip import GeoIPRecord
@@ -55,7 +56,14 @@ class DomainDependencies:
     network_guard: type[NetworkTargetGuard] = NetworkTargetGuard
 
 
-def _analysis_error(check: str) -> AnalysisError:
+def _analysis_error(check: str, timed_out: bool = False) -> AnalysisError:
+    if timed_out:
+        return AnalysisError(
+            check=check,
+            code=f'{check}_timeout',
+            message='Analysis check exceeded the global deadline.',
+        )
+
     code, message = _ANALYSIS_FAILURES[check]
     logger.warning('domain analysis check failed', extra={'check': check})
     return AnalysisError(check=check, code=code, message=message)
@@ -71,6 +79,9 @@ def _result_or_default(
     result = results.get(check)
     if isinstance(result, asyncio.CancelledError):
         raise result
+    if isinstance(result, asyncio.TimeoutError):
+        errors.append(_analysis_error(check, timed_out=True))
+        return default
     if not isinstance(result, expected_type):
         errors.append(_analysis_error(check))
         return default
@@ -81,12 +92,21 @@ async def _load_rdap_context(
     domain: str,
     errors: list[AnalysisError],
     dependencies: DomainDependencies,
+    deadline: float,
 ) -> tuple[list[str], str]:
+    remaining = deadline - asyncio.get_running_loop().time()
+    if remaining <= 0:
+        errors.append(_analysis_error('rdap', timed_out=True))
+        return [], domain
+
     try:
-        bootstrap = await dependencies.rdap_bootstrap.get_instance()
+        bootstrap = await asyncio.wait_for(dependencies.rdap_bootstrap.get_instance(), timeout=remaining)
         servers, rdap_domain = bootstrap.get_servers(domain=domain)
         if servers:
             return servers, rdap_domain
+    except asyncio.TimeoutError:
+        errors.append(_analysis_error('rdap', timed_out=True))
+        return [], domain
     except asyncio.CancelledError:
         raise
     except Exception:
@@ -96,13 +116,50 @@ async def _load_rdap_context(
     return [], domain
 
 
+async def _run_check(
+    check: str,
+    domain: str,
+    operation: Awaitable[Any],
+    analysis_id: str | None,
+    task_id: str | None,
+) -> Any:
+    started_at = perf_counter()
+    check_status = 'success'
+    try:
+        return await operation
+    except asyncio.TimeoutError:
+        check_status = 'timeout'
+        raise
+    except asyncio.CancelledError:
+        check_status = 'cancelled'
+        raise
+    except Exception:
+        check_status = 'failed'
+        raise
+    finally:
+        logger.info(
+            'domain analysis check completed',
+            extra={
+                'domain': domain,
+                'check': check,
+                'analysis_id': analysis_id,
+                'task_id': task_id,
+                'check_status': check_status,
+                'check_duration_ms': round((perf_counter() - started_at) * 1000, 2),
+            },
+        )
+
+
 async def _collect_results(
     domain: str,
     servers: list[str],
     rdap_domain: str,
     dependencies: DomainDependencies,
+    deadline: float,
+    analysis_id: str | None,
+    task_id: str | None,
 ) -> dict[str, object]:
-    tasks: dict[str, Awaitable[Any]] = {
+    operations: dict[str, Awaitable[Any]] = {
         'dns': dependencies.dns_resolver.resolve(domain=domain),
         'dns_propagation': dependencies.dns_propagation.check(domain=domain),
         'http': dependencies.http_service.probe(domain=domain),
@@ -111,9 +168,37 @@ async def _collect_results(
         'latency': dependencies.latency_service.measure(host=domain),
     }
     if servers:
-        tasks['rdap'] = dependencies.rdap_client.query(domain=rdap_domain, servers=servers)
+        operations['rdap'] = dependencies.rdap_client.query(domain=rdap_domain, servers=servers)
 
-    return dict(zip(tasks, await asyncio.gather(*tasks.values(), return_exceptions=True)))
+    tasks = {
+        check: asyncio.create_task(_run_check(check, domain, operation, analysis_id, task_id))
+        for check, operation in operations.items()
+    }
+    pending: set[asyncio.Task[Any]] = set()
+    try:
+        remaining = max(0, deadline - asyncio.get_running_loop().time())
+        done, pending = await asyncio.wait(tasks.values(), timeout=remaining)
+    except asyncio.CancelledError:
+        pending = set(tasks.values())
+        raise
+    finally:
+        if pending:
+            for task in pending:
+                task.cancel()
+            await asyncio.gather(*pending, return_exceptions=True)
+
+    results: dict[str, object] = {}
+    for check, task in tasks.items():
+        if task not in done:
+            results[check] = asyncio.TimeoutError()
+            continue
+        try:
+            results[check] = task.result()
+        except asyncio.CancelledError:
+            raise
+        except Exception as exc:
+            results[check] = exc
+    return results
 
 
 def _get_rdap_result(results: dict[str, object], errors: list[AnalysisError]) -> RDAPResponse | None:
@@ -122,6 +207,9 @@ def _get_rdap_result(results: dict[str, object], errors: list[AnalysisError]) ->
         return None
     if isinstance(raw_result, asyncio.CancelledError):
         raise raw_result
+    if isinstance(raw_result, asyncio.TimeoutError):
+        errors.append(_analysis_error('rdap', timed_out=True))
+        return None
     if isinstance(raw_result, RDAPResponse):
         return raw_result
 
@@ -133,31 +221,101 @@ async def _lookup_geoip(
     ips: list[str],
     errors: list[AnalysisError],
     dependencies: DomainDependencies,
+    deadline: float,
+    domain: str,
+    analysis_id: str | None,
+    task_id: str | None,
 ) -> dict[str, GeoIPRecord]:
+    started_at = perf_counter()
+    remaining = deadline - asyncio.get_running_loop().time()
+    if remaining <= 0:
+        errors.append(_analysis_error('geoip', timed_out=True))
+        logger.info(
+            'domain analysis check completed',
+            extra={
+                'domain': domain,
+                'check': 'geoip',
+                'analysis_id': analysis_id,
+                'task_id': task_id,
+                'check_status': 'timeout',
+                'check_duration_ms': round((perf_counter() - started_at) * 1000, 2),
+            },
+        )
+        return {}
+
+    check_status = 'success'
     try:
-        return await dependencies.geoip_service.lookup(ips=ips)
+        return await asyncio.wait_for(dependencies.geoip_service.lookup(ips=ips), timeout=remaining)
+    except asyncio.TimeoutError:
+        check_status = 'timeout'
+        errors.append(_analysis_error('geoip', timed_out=True))
+        return {}
     except asyncio.CancelledError:
+        check_status = 'cancelled'
         raise
     except Exception:
+        check_status = 'failed'
         errors.append(_analysis_error('geoip'))
         return {}
+    finally:
+        logger.info(
+            'domain analysis check completed',
+            extra={
+                'domain': domain,
+                'check': 'geoip',
+                'analysis_id': analysis_id,
+                'task_id': task_id,
+                'check_status': check_status,
+                'check_duration_ms': round((perf_counter() - started_at) * 1000, 2),
+            },
+        )
 
 
 class DomainService:
     def __init__(self, dependencies: DomainDependencies | None = None):
         self.dependencies = dependencies or DomainDependencies()
 
-    async def analyze(self, domain: str) -> DomainSchema:
+    async def analyze(
+        self,
+        domain: str,
+        analysis_id: str | None = None,
+        task_id: str | None = None,
+    ) -> DomainSchema:
+        started_at = perf_counter()
+        deadline = asyncio.get_running_loop().time() + settings.ANALYSIS_TIMEOUT_SECONDS
         try:
             domain = validate_domain(domain=domain)
         except ValueError as e:
             raise DomainValidationError(str(e)) from e
 
-        await self.dependencies.network_guard.validate(domain)
-        logger.info('domain analysis started', extra={'domain': domain})
+        remaining = deadline - asyncio.get_running_loop().time()
+        if remaining <= 0:
+            raise AnalysisTimeoutError('The domain analysis deadline was exceeded.')
+        try:
+            await asyncio.wait_for(self.dependencies.network_guard.validate(domain), timeout=remaining)
+        except asyncio.TimeoutError as exc:
+            raise AnalysisTimeoutError('The domain analysis deadline was exceeded.') from exc
+
+        logger.info(
+            'domain analysis started',
+            extra={
+                'domain': domain,
+                'analysis_id': analysis_id,
+                'task_id': task_id,
+                'deadline_ms': round(settings.ANALYSIS_TIMEOUT_SECONDS * 1000, 2),
+            },
+        )
         errors: list[AnalysisError] = []
-        servers, rdap_domain = await _load_rdap_context(domain, errors, self.dependencies)
-        raw_results = await _collect_results(domain, servers, rdap_domain, self.dependencies)
+        servers, rdap_domain = await _load_rdap_context(domain, errors, self.dependencies, deadline)
+        raw_results = await _collect_results(
+            domain,
+            servers,
+            rdap_domain,
+            self.dependencies,
+            deadline,
+            analysis_id,
+            task_id,
+        )
 
         rdap_result = _get_rdap_result(raw_results, errors)
         dns_result = _result_or_default(raw_results, 'dns', DNSRecords, DNSRecords(), errors)
@@ -168,7 +326,15 @@ class DomainService:
         latency_result = _result_or_default(raw_results, 'latency', LatencySchema, None, errors)
 
         all_ips = (dns_result.A + dns_result.AAAA)[: settings.MAX_GEOIP_IPS]
-        geoip_result = await _lookup_geoip(ips=all_ips, errors=errors, dependencies=self.dependencies)
+        geoip_result = await _lookup_geoip(
+            ips=all_ips,
+            errors=errors,
+            dependencies=self.dependencies,
+            deadline=deadline,
+            domain=domain,
+            analysis_id=analysis_id,
+            task_id=task_id,
+        )
 
         dns_schema = DNSSchema(
             A=dns_result.A,
@@ -203,6 +369,12 @@ class DomainService:
         )
         logger.info(
             'domain analysis completed',
-            extra={'domain': domain, 'error_count': len(errors)},
+            extra={
+                'domain': domain,
+                'analysis_id': analysis_id,
+                'task_id': task_id,
+                'error_count': len(errors),
+                'analysis_duration_ms': round((perf_counter() - started_at) * 1000, 2),
+            },
         )
         return result

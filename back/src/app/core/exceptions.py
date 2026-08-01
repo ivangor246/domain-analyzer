@@ -36,6 +36,11 @@ class AnalysisQueueError(AppError):
     code = 'analysis_queue_unavailable'
 
 
+class AnalysisTimeoutError(AppError):
+    status_code = 504
+    code = 'analysis_timeout'
+
+
 class RateLimitUnavailableError(AppError):
     status_code = 503
     code = 'rate_limit_unavailable'

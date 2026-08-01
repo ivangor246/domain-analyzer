@@ -14,8 +14,14 @@ class JsonFormatter(logging.Formatter):
         'path',
         'status_code',
         'duration_ms',
+        'analysis_duration_ms',
+        'analysis_id',
+        'task_id',
         'domain',
         'check',
+        'check_duration_ms',
+        'check_status',
+        'deadline_ms',
         'error_count',
     )
 

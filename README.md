@@ -64,6 +64,7 @@ The current configuration supports:
 - provider URLs and `HTTP_USER_AGENT` — configure upstream endpoints and request identity;
 - `REDIS_URL` — configure the Redis broker and result backend used by the background worker;
 - `REDIS_TIMEOUT_SECONDS` — bound Redis connection and command timeouts;
+- `ANALYSIS_TIMEOUT_SECONDS` — set the global deadline for one domain analysis;
 - `CELERY_*` — configure worker concurrency, task time limits, logging, and result retention;
 - `ANALYSIS_JOB_TTL_SECONDS` — configure how long queued-analysis metadata remains available in Redis;
 - provider timeouts, retry counts, response-size, redirect, domain, DNS, GeoIP, and RDAP limits.
@@ -139,6 +140,7 @@ Invalid domains return HTTP 400. An unsuccessful RDAP lookup is reported in `ana
 continue when possible.
 
 The compatible synchronous endpoint `GET /api/domain` completes the available checks in one request and returns partial results when individual providers fail.
+Each analysis also has a global deadline controlled by `ANALYSIS_TIMEOUT_SECONDS`; checks that exceed it are cancelled and reported in `analysis_errors` while completed checks are preserved.
 
 For long-running requests, queue an asynchronous analysis:
 

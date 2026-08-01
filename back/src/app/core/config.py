@@ -40,6 +40,7 @@ class Settings(BaseSettings):
     HTTP_USER_AGENT: str = 'Mozilla/5.0 (compatible; DomainAnalyzer/1.0)'
     REDIS_URL: str = 'redis://redis:6379/0'
     REDIS_TIMEOUT_SECONDS: float = Field(default=5, gt=0)
+    ANALYSIS_TIMEOUT_SECONDS: float = Field(default=120, gt=0)
     CELERY_TASK_TIME_LIMIT_SECONDS: int = Field(default=900, gt=0)
     CELERY_TASK_SOFT_TIME_LIMIT_SECONDS: int = Field(default=840, gt=0)
     CELERY_RESULT_EXPIRES_SECONDS: int = Field(default=3600, gt=0)
@@ -79,6 +80,8 @@ class Settings(BaseSettings):
     def validate_celery_time_limits(self) -> Self:
         if self.CELERY_TASK_SOFT_TIME_LIMIT_SECONDS >= self.CELERY_TASK_TIME_LIMIT_SECONDS:
             raise ValueError('CELERY_TASK_SOFT_TIME_LIMIT_SECONDS must be less than CELERY_TASK_TIME_LIMIT_SECONDS')
+        if self.ANALYSIS_TIMEOUT_SECONDS >= self.CELERY_TASK_SOFT_TIME_LIMIT_SECONDS:
+            raise ValueError('ANALYSIS_TIMEOUT_SECONDS must be less than CELERY_TASK_SOFT_TIME_LIMIT_SECONDS')
         return self
 
 
