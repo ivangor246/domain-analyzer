@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Header, Path, status
 
+from app.core.logging_config import request_id_context
 from app.schemas.analysis import AnalysisCreateSchema, AnalysisJobSchema
 from app.schemas.error import ErrorSchema
 from app.services.analysis_jobs import AnalysisJobService
@@ -27,7 +28,11 @@ async def create_analysis(
     payload: AnalysisCreateSchema,
     idempotency_key: str | None = Header(default=None, alias='Idempotency-Key', max_length=128),
 ) -> AnalysisJobSchema:
-    return await service.create(domain=payload.domain, idempotency_key=idempotency_key)
+    return await service.create(
+        domain=payload.domain,
+        idempotency_key=idempotency_key,
+        request_id=request_id_context.get(),
+    )
 
 
 @analysis_router.get(

@@ -137,8 +137,13 @@ class ApiTestCase(unittest.IsolatedAsyncioTestCase):
         )
 
         class FakeAnalysisService:
-            async def create(self, domain: str, idempotency_key: str | None = None) -> AnalysisJobSchema:
-                self.created = (domain, idempotency_key)
+            async def create(
+                self,
+                domain: str,
+                idempotency_key: str | None = None,
+                request_id: str | None = None,
+            ) -> AnalysisJobSchema:
+                self.created = (domain, idempotency_key, request_id)
                 return job
 
             async def get(self, analysis_id: str) -> AnalysisJobSchema:
@@ -161,7 +166,8 @@ class ApiTestCase(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual(created.status_code, 202)
         self.assertEqual(created.json()['status'], 'queued')
-        self.assertEqual(fake_service.created, ('example.com', 'request-1'))
+        self.assertEqual(fake_service.created[:2], ('example.com', 'request-1'))
+        self.assertRegex(fake_service.created[2], r'^[0-9a-f]{32}$')
         self.assertEqual(received.status_code, 200)
         self.assertEqual(fake_service.requested, job.id)
         self.assertEqual(cancelled.json()['status'], 'cancelled')

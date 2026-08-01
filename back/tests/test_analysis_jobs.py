@@ -1,9 +1,16 @@
 from datetime import datetime, timezone
 import unittest
+from unittest.mock import Mock, patch
 
 from app.core.exceptions import AnalysisConflictError, DomainValidationError
 from app.schemas.analysis import AnalysisStatus
-from app.services.analysis_jobs import AnalysisJobService, AnalysisRecord, RedisAnalysisJobStore, TaskSnapshot
+from app.services.analysis_jobs import (
+    AnalysisJobService,
+    AnalysisRecord,
+    CeleryTaskBroker,
+    RedisAnalysisJobStore,
+    TaskSnapshot,
+)
 
 
 class FakeStore:
@@ -41,9 +48,11 @@ class FakeBroker:
     def __init__(self) -> None:
         self.snapshots: dict[str, TaskSnapshot] = {}
         self.enqueued: list[tuple[str, str]] = []
+        self.request_ids: list[str | None] = []
 
-    async def enqueue(self, analysis_id: str, domain: str) -> None:
+    async def enqueue(self, analysis_id: str, domain: str, request_id: str | None = None) -> None:
         self.enqueued.append((analysis_id, domain))
+        self.request_ids.append(request_id)
         self.snapshots[analysis_id] = TaskSnapshot(state='PENDING')
 
     async def snapshot(self, analysis_id: str) -> TaskSnapshot:
@@ -77,13 +86,14 @@ class AnalysisJobServiceTestCase(unittest.IsolatedAsyncioTestCase):
         self.service = AnalysisJobService(store=self.store, broker=self.broker)
 
     async def test_create_normalizes_domain_and_supports_idempotency(self) -> None:
-        first = await self.service.create('https://Example.com/', idempotency_key='request-1')
+        first = await self.service.create('https://Example.com/', idempotency_key='request-1', request_id='http-1')
         second = await self.service.create('example.com', idempotency_key='request-1')
 
         self.assertEqual(first.id, second.id)
         self.assertEqual(first.domain, 'example.com')
         self.assertEqual(first.status, AnalysisStatus.QUEUED)
         self.assertEqual(len(self.broker.enqueued), 1)
+        self.assertEqual(self.broker.request_ids, ['http-1'])
 
     async def test_idempotency_key_cannot_be_reused_for_another_domain(self) -> None:
         await self.service.create('example.com', idempotency_key='request-1')
@@ -133,6 +143,7 @@ class RedisAnalysisJobStoreTestCase(unittest.IsolatedAsyncioTestCase):
             analysis_id='a' * 32,
             domain='example.com',
             created_at=datetime.now(timezone.utc),
+            request_id='http-1',
         )
 
         reserved = await store.reserve(record, 'request-1')
@@ -146,3 +157,19 @@ class RedisAnalysisJobStoreTestCase(unittest.IsolatedAsyncioTestCase):
         self.assertIsNotNone(cancelled)
         self.assertTrue(cancelled.cancelled)
         self.assertIsNone(await store.get(record.analysis_id))
+
+
+class CeleryTaskBrokerTestCase(unittest.TestCase):
+    def test_enqueue_propagates_request_id_as_task_header(self) -> None:
+        app = Mock()
+        broker = CeleryTaskBroker()
+
+        with patch.object(broker, '_get_app', return_value=app):
+            broker._enqueue_sync('a' * 32, 'example.com', 'request-1')
+
+        app.send_task.assert_called_once_with(
+            'app.tasks.domain.analyze_domain_task',
+            args=['example.com'],
+            task_id='a' * 32,
+            headers={'request_id': 'request-1'},
+        )

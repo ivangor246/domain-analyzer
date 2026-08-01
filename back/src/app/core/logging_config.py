@@ -1,10 +1,34 @@
 import json
 import logging
+from collections.abc import Iterator
+from contextlib import contextmanager
 from contextvars import ContextVar
 from datetime import datetime, timezone
 from typing import Any
 
 request_id_context: ContextVar[str | None] = ContextVar('request_id', default=None)
+analysis_id_context: ContextVar[str | None] = ContextVar('analysis_id', default=None)
+task_id_context: ContextVar[str | None] = ContextVar('task_id', default=None)
+
+
+@contextmanager
+def correlation_context(
+    *,
+    request_id: str | None,
+    analysis_id: str | None,
+    task_id: str | None,
+) -> Iterator[None]:
+    tokens = (
+        request_id_context.set(request_id),
+        analysis_id_context.set(analysis_id),
+        task_id_context.set(task_id),
+    )
+    try:
+        yield
+    finally:
+        task_id_context.reset(tokens[2])
+        analysis_id_context.reset(tokens[1])
+        request_id_context.reset(tokens[0])
 
 
 class JsonFormatter(logging.Formatter):
@@ -17,6 +41,8 @@ class JsonFormatter(logging.Formatter):
         'analysis_duration_ms',
         'analysis_id',
         'task_id',
+        'job_status',
+        'job_duration_ms',
         'domain',
         'check',
         'check_duration_ms',
@@ -41,11 +67,16 @@ class JsonFormatter(logging.Formatter):
         return json.dumps(payload, ensure_ascii=False, default=str)
 
 
-class RequestContextFilter(logging.Filter):
+class CorrelationContextFilter(logging.Filter):
     def filter(self, record: logging.LogRecord) -> bool:
-        request_id = request_id_context.get()
-        if request_id is not None:
-            record.request_id = request_id
+        for field, context in (
+            ('request_id', request_id_context),
+            ('analysis_id', analysis_id_context),
+            ('task_id', task_id_context),
+        ):
+            value = context.get()
+            if value is not None:
+                setattr(record, field, value)
         return True
 
 
@@ -58,6 +89,6 @@ def configure_logging(debug: bool) -> None:
         return
 
     handler = logging.StreamHandler()
-    handler.addFilter(RequestContextFilter())
+    handler.addFilter(CorrelationContextFilter())
     handler.setFormatter(JsonFormatter())
     logger.addHandler(handler)

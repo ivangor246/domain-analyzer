@@ -3,6 +3,7 @@ import hashlib
 import json
 from dataclasses import dataclass
 from datetime import datetime, timezone
+from logging import getLogger
 from threading import Lock
 from typing import Protocol
 from uuid import uuid4
@@ -27,6 +28,8 @@ _JOB_KEY_PREFIX = 'domain_analyzer:analysis:'
 _IDEMPOTENCY_KEY_PREFIX = 'domain_analyzer:idempotency:'
 _TERMINAL_STATES = {'SUCCESS', 'FAILURE', 'REVOKED'}
 
+logger = getLogger(__name__)
+
 
 @dataclass(frozen=True)
 class AnalysisRecord:
@@ -34,6 +37,7 @@ class AnalysisRecord:
     domain: str
     created_at: datetime
     cancelled: bool = False
+    request_id: str | None = None
 
     def to_payload(self) -> str:
         return json.dumps(
@@ -42,6 +46,7 @@ class AnalysisRecord:
                 'domain': self.domain,
                 'created_at': self.created_at.isoformat(),
                 'cancelled': self.cancelled,
+                'request_id': self.request_id,
             },
             separators=(',', ':'),
         )
@@ -54,6 +59,7 @@ class AnalysisRecord:
             domain=str(data['domain']),
             created_at=datetime.fromisoformat(str(data['created_at'])),
             cancelled=bool(data.get('cancelled', False)),
+            request_id=str(data['request_id']) if data.get('request_id') else None,
         )
 
 
@@ -74,7 +80,7 @@ class AnalysisJobStore(Protocol):
 
 
 class TaskBroker(Protocol):
-    async def enqueue(self, analysis_id: str, domain: str) -> None: ...
+    async def enqueue(self, analysis_id: str, domain: str, request_id: str | None = None) -> None: ...
 
     async def snapshot(self, analysis_id: str) -> TaskSnapshot: ...
 
@@ -159,6 +165,7 @@ class RedisAnalysisJobStore:
             domain=record.domain,
             created_at=record.created_at,
             cancelled=cancelled,
+            request_id=record.request_id,
         )
         await client.set(self._job_key(analysis_id), updated.to_payload(), ex=settings.ANALYSIS_JOB_TTL_SECONDS)
 
@@ -190,8 +197,11 @@ class CeleryTaskBroker:
 
         return celery_app
 
-    def _enqueue_sync(self, analysis_id: str, domain: str) -> None:
-        self._get_app().send_task(_TASK_NAME, args=[domain], task_id=analysis_id)
+    def _enqueue_sync(self, analysis_id: str, domain: str, request_id: str | None = None) -> None:
+        options: dict[str, object] = {'task_id': analysis_id}
+        if request_id is not None:
+            options['headers'] = {'request_id': request_id}
+        self._get_app().send_task(_TASK_NAME, args=[domain], **options)
 
     def _snapshot_sync(self, analysis_id: str) -> TaskSnapshot:
         result = self._get_app().AsyncResult(analysis_id)
@@ -202,8 +212,8 @@ class CeleryTaskBroker:
     def _revoke_sync(self, analysis_id: str) -> None:
         self._get_app().control.revoke(analysis_id, terminate=True, signal='SIGTERM')
 
-    async def enqueue(self, analysis_id: str, domain: str) -> None:
-        await asyncio.to_thread(self._enqueue_sync, analysis_id, domain)
+    async def enqueue(self, analysis_id: str, domain: str, request_id: str | None = None) -> None:
+        await asyncio.to_thread(self._enqueue_sync, analysis_id, domain, request_id)
 
     async def snapshot(self, analysis_id: str) -> TaskSnapshot:
         return await asyncio.to_thread(self._snapshot_sync, analysis_id)
@@ -274,12 +284,18 @@ class AnalysisJobService:
             created_at=record.created_at,
         )
 
-    async def create(self, domain: str, idempotency_key: str | None = None) -> AnalysisJobSchema:
+    async def create(
+        self,
+        domain: str,
+        idempotency_key: str | None = None,
+        request_id: str | None = None,
+    ) -> AnalysisJobSchema:
         normalized_domain = self._normalize_domain(domain)
         record = AnalysisRecord(
             analysis_id=uuid4().hex,
             domain=normalized_domain,
             created_at=datetime.now(timezone.utc),
+            request_id=request_id,
         )
         key = idempotency_key.strip() if idempotency_key and idempotency_key.strip() else None
 
@@ -298,11 +314,21 @@ class AnalysisJobService:
 
         await mark_analysis_queued(record.analysis_id)
         try:
-            await self.broker.enqueue(record.analysis_id, normalized_domain)
+            await self.broker.enqueue(record.analysis_id, normalized_domain, record.request_id)
         except Exception as exc:
             await remove_analysis_from_queue(record.analysis_id)
             await self.store.delete(record, key)
             raise AnalysisQueueError('Unable to enqueue the analysis job.') from exc
+
+        logger.info(
+            'analysis queued',
+            extra={
+                'request_id': record.request_id,
+                'analysis_id': record.analysis_id,
+                'task_id': record.analysis_id,
+                'domain': record.domain,
+            },
+        )
 
         return AnalysisJobSchema(
             id=record.analysis_id,

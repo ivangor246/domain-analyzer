@@ -91,7 +91,7 @@ make clear    # Remove services, volumes, images, and orphans
 
 The API is available at `http://localhost:8000`.
 
-Application logs are emitted as one JSON object per line. Each response includes an `X-Request-ID` header that can be used to correlate HTTP and analysis logs.
+Application logs are emitted as one JSON object per line. Each response includes an `X-Request-ID` header. For asynchronous jobs, the request ID is carried into the Celery task and logged together with the analysis ID, task ID, check name, status, and duration, so one analysis can be followed across API, worker, and provider-check logs.
 
 The analysis endpoints return HTTP 429 after the configured number of requests from one client address within the rate-limit window. Redis is used by default so the limit is shared across backend processes. Set `RATE_LIMIT_REDIS_FALLBACK_ENABLED=True` to keep a per-process fallback when Redis is temporarily unavailable; disable the fallback when rejecting requests is preferable to weakening the limit.
 
