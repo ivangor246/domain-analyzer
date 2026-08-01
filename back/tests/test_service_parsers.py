@@ -221,6 +221,58 @@ class ServiceParserTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(response.content, b'ok')
         self.assertEqual(methods, ['HEAD', 'GET'])
 
+    async def test_http_request_uses_fixed_ip_host_header_and_sni(self):
+        requests = []
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            requests.append(request)
+            return httpx.Response(200, request=request)
+
+        client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
+        response, redirect_chain = await http_headers._request_with_safe_redirects(
+            client,
+            'https://example.com/path',
+            target_ip='93.184.216.34',
+        )
+        await client.aclose()
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(redirect_chain, [])
+        self.assertEqual(requests[0].url.host, '93.184.216.34')
+        self.assertEqual(requests[0].headers['host'], 'example.com')
+        self.assertEqual(requests[0].extensions['sni_hostname'], 'example.com')
+        self.assertEqual(response.extensions['domain_analyzer_original_url'], 'https://example.com/path')
+
+    async def test_http_redirect_resolves_destination_to_fixed_ip(self):
+        requests = []
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            requests.append(request)
+            if len(requests) == 1:
+                return httpx.Response(302, headers={'location': 'https://redirect.example/final'}, request=request)
+            return httpx.Response(200, request=request)
+
+        client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
+        with patch.object(
+            http_headers.NetworkTargetGuard,
+            'resolve_public_ips',
+            new=AsyncMock(return_value=['198.51.100.22']),
+        ) as resolve_public_ips:
+            response, redirect_chain = await http_headers._request_with_safe_redirects(
+                client,
+                'https://example.com/start',
+                target_ip='93.184.216.34',
+            )
+        await client.aclose()
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(redirect_chain, ['https://example.com/start'])
+        self.assertEqual(requests[0].url.host, '93.184.216.34')
+        self.assertEqual(requests[0].headers['host'], 'example.com')
+        self.assertEqual(requests[1].url.host, '198.51.100.22')
+        self.assertEqual(requests[1].headers['host'], 'redirect.example')
+        resolve_public_ips.assert_awaited_once_with('redirect.example')
+
     async def test_http_redirect_limit_does_not_follow_extra_redirects(self):
         requests = []
 

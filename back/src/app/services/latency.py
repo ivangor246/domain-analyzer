@@ -9,9 +9,10 @@ from .network_guard import NetworkTargetGuard
 
 class LatencyService:
     @staticmethod
-    async def measure(host: str) -> LatencySchema:
-        addresses = await NetworkTargetGuard.resolve_public_ips(host)
-        ip = addresses[0]
+    async def measure(host: str, target_ips: list[str] | None = None) -> LatencySchema:
+        if target_ips is None:
+            target_ips = await NetworkTargetGuard.resolve_public_ips(host)
+        ip = target_ips[0]
 
         tcp_80, tcp_443 = await asyncio.gather(
             LatencyService._probe(ip, 80),

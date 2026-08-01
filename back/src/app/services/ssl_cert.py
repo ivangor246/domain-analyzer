@@ -15,8 +15,10 @@ _PORT = 443
 
 class SSLCertService:
     @staticmethod
-    async def check(domain: str) -> SSLSchema:
-        target_ip = (await NetworkTargetGuard.resolve_public_ips(domain))[0]
+    async def check(domain: str, target_ips: list[str] | None = None) -> SSLSchema:
+        if target_ips is None:
+            target_ips = await NetworkTargetGuard.resolve_public_ips(domain)
+        target_ip = target_ips[0]
 
         # Verify certificate with default context (trusted CA + hostname check)
         valid, error = await SSLCertService._check_validity(domain, target_ip)

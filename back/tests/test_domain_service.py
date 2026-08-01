@@ -15,14 +15,15 @@ from app.services.domain import DomainDependencies, DomainService
 
 class FakeGuard:
     @staticmethod
-    async def validate(host: str) -> None:
-        return None
+    async def resolve_public_ips(host: str) -> list[str]:
+        return ['8.8.8.8']
 
 
 class SlowGuard:
     @staticmethod
-    async def validate(host: str) -> None:
+    async def resolve_public_ips(host: str) -> list[str]:
         await asyncio.sleep(1)
+        return ['8.8.8.8']
 
 
 class FakeBootstrap:
@@ -61,25 +62,25 @@ class FakePropagation:
 
 class FakeHTTP:
     @staticmethod
-    async def probe(domain: str) -> HTTPSchema:
+    async def probe(domain: str, target_ips: list[str]) -> HTTPSchema:
         return HTTPSchema()
 
 
 class FakeSSL:
     @staticmethod
-    async def check(domain: str) -> SSLSchema:
+    async def check(domain: str, target_ips: list[str]) -> SSLSchema:
         return SSLSchema(valid=True)
 
 
 class FakePorts:
     @staticmethod
-    async def scan(host: str) -> PortsSchema:
+    async def scan(host: str, target_ips: list[str]) -> PortsSchema:
         return PortsSchema()
 
 
 class FakeLatency:
     @staticmethod
-    async def measure(host: str) -> LatencySchema:
+    async def measure(host: str, target_ips: list[str]) -> LatencySchema:
         return LatencySchema()
 
 

@@ -285,6 +285,7 @@ async def _run_check(
 
 async def _collect_results(
     domain: str,
+    target_ips: list[str],
     servers: list[str],
     rdap_domain: str,
     dependencies: DomainDependencies,
@@ -297,10 +298,10 @@ async def _collect_results(
     operations: dict[str, Awaitable[Any]] = {
         'dns': dependencies.dns_resolver.resolve(domain=domain),
         'dns_propagation': dependencies.dns_propagation.check(domain=domain),
-        'http': dependencies.http_service.probe(domain=domain),
-        'ssl': dependencies.ssl_service.check(domain=domain),
-        'ports': dependencies.port_scanner.scan(host=domain),
-        'latency': dependencies.latency_service.measure(host=domain),
+        'http': dependencies.http_service.probe(domain=domain, target_ips=target_ips),
+        'ssl': dependencies.ssl_service.check(domain=domain, target_ips=target_ips),
+        'ports': dependencies.port_scanner.scan(host=domain, target_ips=target_ips),
+        'latency': dependencies.latency_service.measure(host=domain, target_ips=target_ips),
     }
     if servers:
         operations['rdap'] = dependencies.rdap_client.query(domain=rdap_domain, servers=servers)
@@ -477,7 +478,10 @@ class DomainService:
         if remaining <= 0:
             raise AnalysisTimeoutError('The domain analysis deadline was exceeded.')
         try:
-            await asyncio.wait_for(self.dependencies.network_guard.validate(domain), timeout=remaining)
+            target_ips = await asyncio.wait_for(
+                self.dependencies.network_guard.resolve_public_ips(domain),
+                timeout=remaining,
+            )
         except asyncio.TimeoutError as exc:
             raise AnalysisTimeoutError('The domain analysis deadline was exceeded.') from exc
 
@@ -505,6 +509,7 @@ class DomainService:
         )
         raw_results = await _collect_results(
             domain,
+            target_ips,
             servers,
             rdap_domain,
             self.dependencies,

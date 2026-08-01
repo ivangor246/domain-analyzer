@@ -23,9 +23,10 @@ _PORTS: dict[int, str] = {
 
 class PortScanner:
     @staticmethod
-    async def scan(host: str) -> PortsSchema:
-        addresses = await NetworkTargetGuard.resolve_public_ips(host)
-        target = addresses[0]
+    async def scan(host: str, target_ips: list[str] | None = None) -> PortsSchema:
+        if target_ips is None:
+            target_ips = await NetworkTargetGuard.resolve_public_ips(host)
+        target = target_ips[0]
 
         tasks = [PortScanner._check_port(target, port) for port in _PORTS]
         results: list[PortResult] = list(await asyncio.gather(*tasks))
