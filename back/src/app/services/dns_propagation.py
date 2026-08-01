@@ -49,5 +49,7 @@ class DNSPropagation:
         try:
             answer = await resolver.resolve(domain, rdtype)
             return [rdata.address for rdata in answer][: settings.MAX_DNS_RECORDS]
-        except (dns.resolver.NoAnswer, dns.resolver.NXDOMAIN, dns.resolver.NoNameservers):
+        except dns.exception.Timeout:
+            raise
+        except dns.exception.DNSException:
             return []

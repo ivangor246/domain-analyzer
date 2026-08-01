@@ -15,7 +15,7 @@ class NetworkTargetGuard:
             return False
 
     @staticmethod
-    async def validate(host: str) -> None:
+    async def resolve_public_ips(host: str) -> list[str]:
         loop = asyncio.get_running_loop()
 
         try:
@@ -28,6 +28,18 @@ class NetworkTargetGuard:
         except (OSError, asyncio.TimeoutError) as e:
             raise TargetNotAllowedError('Domain must resolve to a public IP address.') from e
 
-        resolved_ips = {address[4][0] for address in addresses if address[4]}
+        resolved_ips: list[str] = []
+        for address in addresses:
+            if len(address) <= 4 or not address[4] or not address[4][0]:
+                continue
+            ip = address[4][0]
+            if ip not in resolved_ips:
+                resolved_ips.append(ip)
         if not resolved_ips or any(not NetworkTargetGuard.is_public_ip(ip) for ip in resolved_ips):
             raise TargetNotAllowedError('Domain must resolve only to public IP addresses.')
+
+        return resolved_ips
+
+    @staticmethod
+    async def validate(host: str) -> None:
+        await NetworkTargetGuard.resolve_public_ips(host)

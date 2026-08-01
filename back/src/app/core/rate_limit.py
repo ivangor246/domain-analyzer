@@ -26,9 +26,13 @@ class RateLimiter:
         cutoff = now - self.window_seconds
 
         async with self._lock:
+            for stored_key, timestamps in tuple(self._requests.items()):
+                while timestamps and timestamps[0] <= cutoff:
+                    timestamps.popleft()
+                if not timestamps:
+                    del self._requests[stored_key]
+
             timestamps = self._requests.setdefault(key, deque())
-            while timestamps and timestamps[0] <= cutoff:
-                timestamps.popleft()
 
             if len(timestamps) >= self.max_requests:
                 retry_after = max(1, math.ceil(timestamps[0] + self.window_seconds - now))

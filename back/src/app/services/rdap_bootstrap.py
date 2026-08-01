@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 from typing import ClassVar
 
 import httpx
@@ -15,20 +16,28 @@ class RDAPBootstrap:
     """
 
     _instance: ClassVar[RDAPBootstrap] | None = None
+    _load_lock: ClassVar[asyncio.Lock | None] = None
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.data: dict[str, list[str]] = {}
 
     @classmethod
     async def get_instance(cls) -> RDAPBootstrap:
-        if cls._instance is None:
-            instance = cls()
-            await instance.load()
-            cls._instance = instance
+        if cls._instance is not None:
+            return cls._instance
+
+        if cls._load_lock is None:
+            cls._load_lock = asyncio.Lock()
+
+        async with cls._load_lock:
+            if cls._instance is None:
+                instance = cls()
+                await instance.load()
+                cls._instance = instance
         return cls._instance
 
-    async def load(self):
-        async with httpx.AsyncClient(timeout=settings.BOOTSTRAP_TIMEOUT_SECONDS) as client:
+    async def load(self) -> None:
+        async with httpx.AsyncClient(timeout=settings.BOOTSTRAP_TIMEOUT_SECONDS, trust_env=False) as client:
 
             async def fetch() -> object:
                 async with client.stream('GET', settings.BOOTSTRAP_URL) as response:
@@ -43,11 +52,27 @@ class RDAPBootstrap:
                 backoff_seconds=settings.RETRY_BACKOFF_SECONDS,
             )
 
-        mapping = {}
+        if not isinstance(json_data, dict) or not isinstance(json_data.get('services'), list):
+            raise ValueError('Invalid RDAP bootstrap response.')
+
+        mapping: dict[str, list[str]] = {}
         for entry in json_data['services']:
+            if not isinstance(entry, list) or len(entry) != 2:
+                continue
             tlds, urls = entry
+            if not isinstance(tlds, list) or not isinstance(urls, list):
+                continue
+
+            valid_urls = [url.strip() for url in urls if isinstance(url, str) and url.strip()]
+            if not valid_urls:
+                continue
+
             for tld in tlds:
-                mapping[tld.lower()] = urls
+                if isinstance(tld, str) and tld.strip():
+                    mapping[tld.strip().lower().rstrip('.')] = valid_urls
+
+        if not mapping:
+            raise ValueError('RDAP bootstrap response contains no services.')
 
         self.data = mapping
 
@@ -62,5 +87,5 @@ class RDAPBootstrap:
             tld = '.'.join(labels[n:]).lower()
             if tld in self.data:
                 rdap_domain = '.'.join(labels[n - 1 :])
-                return self.data[tld], rdap_domain
+                return list(self.data[tld]), rdap_domain
         raise ValueError(f'No RDAP server for domain: {domain}')

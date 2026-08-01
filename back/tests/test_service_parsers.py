@@ -54,6 +54,24 @@ class ServiceParserTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result.updated_date, datetime(2024, 1, 2, 3, 4, 5, tzinfo=timezone.utc))
         self.assertEqual(result.whois_server, 'whois.example.com')
 
+    def test_rdap_parser_ignores_malformed_optional_fields(self):
+        result = RDAPClient._parse(
+            'https://rdap.example.com',
+            {
+                'status': None,
+                'events': [None, {}, {'eventAction': 'registration', 'eventDate': 'not-a-date'}],
+                'nameservers': [None, {}, {'ldhName': 123}],
+                'entities': [None, {'roles': None}, {'roles': ['registrar'], 'vcardArray': ['vcard', [['fn']]]}],
+                'port43': 123,
+            },
+        )
+
+        self.assertEqual(result.status, [])
+        self.assertEqual(result.nameservers, [])
+        self.assertIsNone(result.registrar)
+        self.assertIsNone(result.registration_date)
+        self.assertIsNone(result.whois_server)
+
     def test_rdap_bootstrap_prefers_longest_matching_suffix(self):
         bootstrap = RDAPBootstrap()
         bootstrap.data = {
@@ -203,6 +221,41 @@ class ServiceParserTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(response.content, b'ok')
         self.assertEqual(methods, ['HEAD', 'GET'])
 
+    async def test_http_redirect_limit_does_not_follow_extra_redirects(self):
+        requests = []
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            requests.append(request)
+            return httpx.Response(302, headers={'location': '/next'}, request=request)
+
+        client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
+        with (
+            patch.object(http_headers.settings, 'HTTP_MAX_REDIRECTS', 1),
+            patch.object(http_headers.NetworkTargetGuard, 'validate', new=AsyncMock()),
+        ):
+            response, redirect_chain = await http_headers._request_with_safe_redirects(client, 'http://example.com')
+        await client.aclose()
+
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(len(requests), 2)
+        self.assertEqual(redirect_chain, ['http://example.com'])
+
+    async def test_http_redirect_limit_zero_does_not_follow(self):
+        requests = []
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            requests.append(request)
+            return httpx.Response(302, headers={'location': '/next'}, request=request)
+
+        client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
+        with patch.object(http_headers.settings, 'HTTP_MAX_REDIRECTS', 0):
+            response, redirect_chain = await http_headers._request_with_safe_redirects(client, 'http://example.com')
+        await client.aclose()
+
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(len(requests), 1)
+        self.assertEqual(redirect_chain, [])
+
     def test_safe_redirect_url_resolves_relative_locations(self):
         self.assertEqual(
             http_headers._safe_redirect_url('https://example.com/path/start', '../final'),
@@ -237,6 +290,8 @@ class ServiceParserTests(unittest.IsolatedAsyncioTestCase):
                     },
                     {'status': 'fail', 'query': '192.0.2.2'},
                     {'status': 'success', 'query': ''},
+                    {'status': 'success', 'query': '198.51.100.10'},
+                    {'status': 'success', 'query': '192.0.2.2', 'as': 123, 'lat': {'invalid': True}},
                 ],
                 request=request,
             )
@@ -249,6 +304,7 @@ class ServiceParserTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result['192.0.2.1'].asn, 'AS64500')
         self.assertEqual(result['192.0.2.1'].asn_name, 'Example Network')
         self.assertNotIn('192.0.2.2', result)
+        self.assertNotIn('198.51.100.10', result)
         self.assertEqual(len(received_payload), 1)
 
     async def test_geoip_lookup_skips_empty_input(self):

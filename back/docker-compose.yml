@@ -6,7 +6,7 @@ services:
     env_file:
       - .env
     environment:
-      - DEV_MODE  # Setup in Makefile (True/False)
+      DEV_MODE: ${DEV_MODE:-False} # Set to True by make dev
     ports:
       - 8000:8000
     develop:

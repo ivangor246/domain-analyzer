@@ -56,13 +56,13 @@ async def _request_with_safe_redirects(
     current_url = url
     redirect_chain: list[str] = []
 
-    for _ in range(settings.HTTP_MAX_REDIRECTS + 1):
+    for redirect_count in range(settings.HTTP_MAX_REDIRECTS + 1):
         response = await _request(client, current_url)
         if not response.is_redirect:
             return response, redirect_chain
 
         location = response.headers.get('location')
-        if not location:
+        if not location or redirect_count >= settings.HTTP_MAX_REDIRECTS:
             return response, redirect_chain
 
         next_url = _safe_redirect_url(current_url, location)
@@ -95,6 +95,7 @@ class HTTPHeadersService:
                 timeout=settings.HTTP_TIMEOUT_SECONDS,
                 follow_redirects=False,
                 verify=False,
+                trust_env=False,
                 headers={'User-Agent': settings.HTTP_USER_AGENT},
             ) as client:
                 response, redirect_chain = await _request_with_safe_redirects(client, url)

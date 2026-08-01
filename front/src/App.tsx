@@ -99,7 +99,12 @@ function App() {
               <strong>Analysis could not be completed</strong>
               <p>{errorMessage(view.error)}</p>
             </div>
-            <button type="button" className="button button-secondary" onClick={() => void runAnalysis(domain.trim())}>
+            <button
+              type="button"
+              className="button button-secondary"
+              onClick={() => void runAnalysis(domain.trim())}
+              disabled={!domain.trim()}
+            >
               Try again
             </button>
           </section>

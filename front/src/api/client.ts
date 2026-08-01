@@ -1,6 +1,6 @@
 import type { DomainAnalysis, ErrorPayload } from './types'
 
-const API_URL = (import.meta.env.VITE_API_URL || 'http://localhost:8000').replace(/\/$/, '')
+const API_URL = (import.meta.env.VITE_API_URL || 'http://localhost:8000').replace(/\/+$/, '')
 
 export class ApiError extends Error {
   readonly status: number
@@ -35,7 +35,7 @@ export async function analyzeDomain(domain: string, signal?: AbortSignal): Promi
       signal,
     })
   } catch (error) {
-    if (error instanceof DOMException && error.name === 'AbortError') {
+    if (error instanceof Error && error.name === 'AbortError') {
       throw error
     }
     throw new Error('The backend could not be reached. Check the API URL and try again.')

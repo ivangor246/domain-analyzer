@@ -131,7 +131,8 @@ Analyze a domain with:
 curl 'http://localhost:8000/api/domain?d=example.com'
 ```
 
-Invalid domains return HTTP 400. An unsuccessful RDAP lookup returns HTTP 502.
+Invalid domains return HTTP 400. An unsuccessful RDAP lookup is reported in `analysis_errors` while other checks
+continue when possible.
 
 The initial API is intentionally synchronous: `GET /api/domain` completes the available checks in one request and returns partial results when individual providers fail. A background job endpoint will be introduced only if the analysis duration or workload requires it.
 

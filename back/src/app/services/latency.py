@@ -1,20 +1,17 @@
 import asyncio
-import socket
 import time
 
 from app.core.config import settings
 from app.schemas.latency import LatencyResult, LatencySchema
 
+from .network_guard import NetworkTargetGuard
+
 
 class LatencyService:
     @staticmethod
     async def measure(host: str) -> LatencySchema:
-        try:
-            loop = asyncio.get_running_loop()
-            infos = await loop.getaddrinfo(host, None, type=socket.SOCK_STREAM)
-            ip = infos[0][4][0]
-        except Exception:
-            ip = host
+        addresses = await NetworkTargetGuard.resolve_public_ips(host)
+        ip = addresses[0]
 
         tcp_80, tcp_443 = await asyncio.gather(
             LatencyService._probe(ip, 80),

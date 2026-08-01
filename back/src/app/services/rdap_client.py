@@ -3,7 +3,7 @@ from datetime import datetime
 from urllib.parse import urlparse
 
 import httpx
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from app.core.config import settings
 from app.core.exceptions import RDAPError
@@ -14,8 +14,8 @@ from .network_guard import NetworkTargetGuard
 
 class RDAPResponse(BaseModel):
     server: str
-    status: list[str] = []
-    nameservers: list[str] = []
+    status: list[str] = Field(default_factory=list)
+    nameservers: list[str] = Field(default_factory=list)
     registrar: str | None = None
     registration_date: datetime | None = None
     expiration_date: datetime | None = None
@@ -26,14 +26,24 @@ class RDAPResponse(BaseModel):
 class RDAPClient:
     @staticmethod
     async def query(domain: str, servers: list[str]) -> RDAPResponse:
-        async with httpx.AsyncClient(timeout=settings.RDAP_TIMEOUT_SECONDS, follow_redirects=False) as client:
+        async with httpx.AsyncClient(
+            timeout=settings.RDAP_TIMEOUT_SECONDS,
+            follow_redirects=False,
+            trust_env=False,
+        ) as client:
             for server in servers:
-                parsed_server = urlparse(server)
+                try:
+                    parsed_server = urlparse(server.strip())
+                    parsed_server.port
+                except ValueError:
+                    continue
                 if (
                     parsed_server.scheme not in {'http', 'https'}
                     or not parsed_server.hostname
                     or parsed_server.username
                     or parsed_server.password
+                    or parsed_server.query
+                    or parsed_server.fragment
                 ):
                     continue
                 try:
@@ -41,7 +51,7 @@ class RDAPClient:
                 except Exception:
                     continue
 
-                url = f'{server.rstrip("/")}/domain/{domain}'
+                url = f'{parsed_server.geturl().rstrip("/")}/domain/{domain}'
                 try:
 
                     async def fetch() -> object:
@@ -68,35 +78,71 @@ class RDAPClient:
 
     @staticmethod
     def _parse(server: str, data: dict) -> RDAPResponse:
-        events = {e['eventAction']: e['eventDate'] for e in data.get('events', [])}
+        events: dict[str, datetime] = {}
+        events_data = data.get('events', [])
+        if not isinstance(events_data, list):
+            events_data = []
+        for event in events_data:
+            if not isinstance(event, dict):
+                continue
+            action = event.get('eventAction')
+            event_date = RDAPClient._parse_datetime(event.get('eventDate'))
+            if isinstance(action, str) and event_date is not None:
+                events[action] = event_date
 
-        nameservers = [ns['ldhName'].lower() for ns in data.get('nameservers', []) if 'ldhName' in ns][
-            : settings.MAX_RDAP_NAMESERVERS
-        ]
+        nameservers_data = data.get('nameservers', [])
+        if not isinstance(nameservers_data, list):
+            nameservers_data = []
+        nameservers = [
+            ns['ldhName'].lower()
+            for ns in nameservers_data
+            if isinstance(ns, dict) and isinstance(ns.get('ldhName'), str)
+        ][: settings.MAX_RDAP_NAMESERVERS]
 
+        entities_data = data.get('entities', [])
+        if not isinstance(entities_data, list):
+            entities_data = []
         registrar = None
-        for entity in data.get('entities', []):
-            if 'registrar' in entity.get('roles', []):
+        for entity in entities_data:
+            roles = entity.get('roles', []) if isinstance(entity, dict) else []
+            if isinstance(entity, dict) and isinstance(roles, list) and 'registrar' in roles:
                 registrar = RDAPClient._extract_entity_name(entity)
                 break
 
+        status_data = data.get('status', [])
+        if not isinstance(status_data, list):
+            status_data = []
+        status = [value for value in status_data if isinstance(value, str)]
+        whois_server = data.get('port43')
+
         return RDAPResponse(
             server=server,
-            status=data.get('status', []),
+            status=status,
             nameservers=nameservers,
             registrar=registrar,
             registration_date=events.get('registration'),
             expiration_date=events.get('expiration'),
             updated_date=events.get('last changed'),
-            whois_server=data.get('port43'),
+            whois_server=whois_server if isinstance(whois_server, str) else None,
         )
 
     @staticmethod
     def _extract_entity_name(entity: dict) -> str | None:
         vcard = entity.get('vcardArray')
-        if not vcard or len(vcard) < 2:
+        if not isinstance(vcard, list) or len(vcard) < 2 or not isinstance(vcard[1], list):
             return None
         for field in vcard[1]:
-            if field[0] == 'fn':
+            if isinstance(field, list) and len(field) >= 4 and field[0] == 'fn' and isinstance(field[3], str):
                 return field[3]
         return None
+
+    @staticmethod
+    def _parse_datetime(value: object) -> datetime | None:
+        if isinstance(value, datetime):
+            return value
+        if not isinstance(value, str):
+            return None
+        try:
+            return datetime.fromisoformat(value.replace('Z', '+00:00'))
+        except ValueError:
+            return None

@@ -8,18 +8,22 @@ from cryptography.hazmat.primitives import hashes
 from app.core.config import settings
 from app.schemas.ssl import SSLCertificate, SSLSchema
 
+from .network_guard import NetworkTargetGuard
+
 _PORT = 443
 
 
 class SSLCertService:
     @staticmethod
     async def check(domain: str) -> SSLSchema:
+        target_ip = (await NetworkTargetGuard.resolve_public_ips(domain))[0]
+
         # Verify certificate with default context (trusted CA + hostname check)
-        valid, error = await SSLCertService._check_validity(domain)
+        valid, error = await SSLCertService._check_validity(domain, target_ip)
 
         # Get raw certificate and TLS negotiation info without verification
         try:
-            cert_bin, protocol, cipher = await SSLCertService._get_raw_cert(domain)
+            cert_bin, protocol, cipher = await SSLCertService._get_raw_cert(domain, target_ip)
         except Exception as e:
             return SSLSchema(valid=valid, error=error or str(e))
 
@@ -38,12 +42,12 @@ class SSLCertService:
         )
 
     @staticmethod
-    async def _check_validity(domain: str) -> tuple[bool, str | None]:
+    async def _check_validity(domain: str, target_ip: str | None = None) -> tuple[bool, str | None]:
         ctx = ssl.create_default_context()
         writer = None
         try:
             _, writer = await asyncio.wait_for(
-                asyncio.open_connection(domain, _PORT, ssl=ctx, server_hostname=domain),
+                asyncio.open_connection(target_ip or domain, _PORT, ssl=ctx, server_hostname=domain),
                 timeout=settings.TLS_TIMEOUT_SECONDS,
             )
             return True, None
@@ -64,13 +68,13 @@ class SSLCertService:
                     pass
 
     @staticmethod
-    async def _get_raw_cert(domain: str) -> tuple[bytes, str | None, str | None]:
+    async def _get_raw_cert(domain: str, target_ip: str | None = None) -> tuple[bytes, str | None, str | None]:
         ctx = ssl.create_default_context()
         ctx.check_hostname = False
         ctx.verify_mode = ssl.CERT_NONE
 
         _, writer = await asyncio.wait_for(
-            asyncio.open_connection(domain, _PORT, ssl=ctx, server_hostname=domain),
+            asyncio.open_connection(target_ip or domain, _PORT, ssl=ctx, server_hostname=domain),
             timeout=settings.TLS_TIMEOUT_SECONDS,
         )
         try:

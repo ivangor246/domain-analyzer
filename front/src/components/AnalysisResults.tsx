@@ -19,11 +19,18 @@ interface ResultSectionProps {
   children: ReactNode
 }
 
+function headingId(title: string) {
+  const slug = title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')
+  return `${slug || 'result'}-heading`
+}
+
 function ResultSection({ title, description, wide = false, children }: ResultSectionProps) {
+  const id = headingId(title)
+
   return (
-    <section className={`result-section${wide ? ' result-section-wide' : ''}`} aria-labelledby={`${title}-heading`}>
+    <section className={`result-section${wide ? ' result-section-wide' : ''}`} aria-labelledby={id}>
       <div className="section-heading">
-        <h3 id={`${title}-heading`}>{title}</h3>
+        <h3 id={id}>{title}</h3>
         {description && <p>{description}</p>}
       </div>
       {children}
@@ -42,8 +49,8 @@ function StringList({ values, empty = 'No records returned.' }: { values: string
 
   return (
     <ul className="value-list">
-      {values.map((value) => (
-        <li key={value}>{value}</li>
+      {values.map((value, index) => (
+        <li key={`${value}-${index}`}>{value}</li>
       ))}
     </ul>
   )
@@ -113,8 +120,8 @@ function DNSRecords({ analysis }: { analysis: DomainAnalysis }) {
             <EmptyState />
           ) : (
             <ul className="value-list">
-              {dns.MX.map((record) => (
-                <li key={`${record.priority}-${record.exchange}`}>
+              {dns.MX.map((record, index) => (
+                <li key={`${record.priority}-${record.exchange}-${index}`}>
                   <span className="record-badge">{record.priority}</span> {record.exchange}
                 </li>
               ))}
@@ -139,8 +146,8 @@ function DNSRecords({ analysis }: { analysis: DomainAnalysis }) {
             <EmptyState />
           ) : (
             <ul className="value-list">
-              {dns.CAA.map((record) => (
-                <li key={`${record.tag}-${record.value}`}>
+              {dns.CAA.map((record, index) => (
+                <li key={`${record.tag}-${record.value}-${index}`}>
                   {record.tag}: {record.value}
                 </li>
               ))}
@@ -177,8 +184,8 @@ function PropagationTable({ propagation }: { propagation: Propagation | null }) 
             </tr>
           </thead>
           <tbody>
-            {propagation.servers.map((server) => (
-              <tr key={server.ip}>
+            {propagation.servers.map((server, index) => (
+              <tr key={`${server.ip}-${index}`}>
                 <th scope="row">
                   {server.name}
                   <span className="table-subtitle">{server.ip}</span>
@@ -252,7 +259,10 @@ function HTTPProbe({ label, probe }: { label: string; probe: HTTPProbeResult | n
       </div>
       <dl className="compact-fields">
         <Field label="Status" value={probe.status_code} />
-        <Field label="Response" value={probe.response_time_ms ? `${probe.response_time_ms} ms` : '—'} />
+        <Field
+          label="Response"
+          value={probe.response_time_ms === null ? '—' : `${probe.response_time_ms} ms`}
+        />
         <Field label="Server" value={probe.server} />
         <Field label="Content type" value={probe.content_type} />
         <Field label="Final URL" value={probe.final_url} />

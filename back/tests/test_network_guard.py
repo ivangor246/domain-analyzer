@@ -32,3 +32,10 @@ class NetworkTargetGuardTestCase(unittest.IsolatedAsyncioTestCase):
         loop = FakeLoop('8.8.8.8')
         with patch('app.services.network_guard.asyncio.get_running_loop', return_value=loop):
             await NetworkTargetGuard.validate('public.test')
+
+    async def test_returns_public_resolution_for_fixed_target_connections(self) -> None:
+        loop = FakeLoop('8.8.8.8')
+        with patch('app.services.network_guard.asyncio.get_running_loop', return_value=loop):
+            addresses = await NetworkTargetGuard.resolve_public_ips('public.test')
+
+        self.assertEqual(addresses, ['8.8.8.8'])

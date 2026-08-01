@@ -1,8 +1,9 @@
 import asyncio
-import socket
 
 from app.core.config import settings
 from app.schemas.ports import PortResult, PortsSchema
+
+from .network_guard import NetworkTargetGuard
 
 _PORTS: dict[int, str] = {
     21: 'FTP',
@@ -23,12 +24,8 @@ _PORTS: dict[int, str] = {
 class PortScanner:
     @staticmethod
     async def scan(host: str) -> PortsSchema:
-        try:
-            loop = asyncio.get_running_loop()
-            infos = await loop.getaddrinfo(host, None, type=socket.SOCK_STREAM)
-            target = infos[0][4][0]
-        except Exception:
-            target = host
+        addresses = await NetworkTargetGuard.resolve_public_ips(host)
+        target = addresses[0]
 
         tasks = [PortScanner._check_port(target, port) for port in _PORTS]
         results: list[PortResult] = list(await asyncio.gather(*tasks))

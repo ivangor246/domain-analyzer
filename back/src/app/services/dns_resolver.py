@@ -2,23 +2,22 @@ import asyncio
 from typing import Any
 
 import dns.asyncresolver
-import dns.rdatatype
 import dns.reversename
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from app.core.config import settings
 
 
 class DNSRecords(BaseModel):
-    A: list[str] = []
-    AAAA: list[str] = []
-    MX: list[dict[str, Any]] = []
-    TXT: list[str] = []
-    CNAME: list[str] = []
-    NS: list[str] = []
+    A: list[str] = Field(default_factory=list)
+    AAAA: list[str] = Field(default_factory=list)
+    MX: list[dict[str, Any]] = Field(default_factory=list)
+    TXT: list[str] = Field(default_factory=list)
+    CNAME: list[str] = Field(default_factory=list)
+    NS: list[str] = Field(default_factory=list)
     SOA: dict[str, Any] | None = None
-    CAA: list[dict[str, Any]] = []
-    PTR: dict[str, str | None] = {}
+    CAA: list[dict[str, Any]] = Field(default_factory=list)
+    PTR: dict[str, str | None] = Field(default_factory=dict)
 
 
 class DNSResolver:
@@ -56,7 +55,7 @@ class DNSResolver:
     async def _query(resolver: dns.asyncresolver.Resolver, domain: str, rdtype: str) -> dns.resolver.Answer | None:
         try:
             return await resolver.resolve(domain, rdtype)
-        except (dns.resolver.NoAnswer, dns.resolver.NXDOMAIN, dns.resolver.NoNameservers, dns.exception.Timeout):
+        except dns.exception.DNSException:
             return None
 
     @staticmethod
@@ -67,7 +66,7 @@ class DNSResolver:
                 answer = await resolver.resolve(rev_name, 'PTR')
                 for rdata in answer:
                     return ip, str(rdata.target).rstrip('.')
-            except (dns.resolver.NoAnswer, dns.resolver.NXDOMAIN, dns.resolver.NoNameservers, dns.exception.Timeout):
+            except (dns.exception.DNSException, ValueError):
                 pass
             return ip, None
 
