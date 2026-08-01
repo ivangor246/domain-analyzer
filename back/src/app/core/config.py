@@ -40,6 +40,7 @@ class Settings(BaseSettings):
     RATE_LIMIT_ENABLED: bool = True
     RATE_LIMIT_REQUESTS: int = Field(default=30, gt=0)
     RATE_LIMIT_WINDOW_SECONDS: float = Field(default=60, gt=0)
+    CORS_ORIGINS: list[str] = Field(default_factory=lambda: ['http://localhost:5173'])
     DNS_SERVERS: list[str] = Field(default_factory=lambda: ['8.8.8.8', '1.1.1.1'])
     PROPAGATION_SERVERS: list[dict[str, str]] = Field(
         default_factory=lambda: [

@@ -46,7 +46,10 @@ front-build:
 front-lint:
 	npm --prefix $(FRONTEND_DIR) run lint
 
+front-test:
+	npm --prefix $(FRONTEND_DIR) run test
+
 front-typecheck:
 	npm --prefix $(FRONTEND_DIR) run typecheck
 
-front-check: front-typecheck front-lint
+front-check: front-typecheck front-lint front-test

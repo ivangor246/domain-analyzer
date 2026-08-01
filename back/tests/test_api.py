@@ -79,3 +79,16 @@ class ApiTestCase(unittest.IsolatedAsyncioTestCase):
         self.assertIn('429', operation['responses'])
         self.assertEqual(operation['parameters'][0]['name'], 'd')
         self.assertEqual(operation['parameters'][0]['schema']['maxLength'], settings.MAX_DOMAIN_LENGTH)
+
+    async def test_cors_allows_configured_frontend_origin(self) -> None:
+        response = await self.client.options(
+            '/api/domain',
+            headers={
+                'Origin': 'http://localhost:5173',
+                'Access-Control-Request-Method': 'GET',
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.headers['Access-Control-Allow-Origin'], 'http://localhost:5173')
+        self.assertIn('GET', response.headers['Access-Control-Allow-Methods'])

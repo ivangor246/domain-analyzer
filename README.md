@@ -32,7 +32,7 @@ For safety, the backend only analyzes domains that resolve to public IP addresse
 │   ├── Dockerfile
 │   ├── docker-compose.yml
 │   └── entrypoint.sh
-├── front/                   # Planned Vite + TypeScript + React application
+├── front/                   # Vite + TypeScript + React application
 ├── AGENTS.md                # Instructions for AI agents
 ├── Makefile                 # Repository-level backend commands
 └── README.md
@@ -64,6 +64,7 @@ The current configuration supports:
 - provider URLs and `HTTP_USER_AGENT` — configure upstream endpoints and request identity;
 - provider timeouts, retry counts, response-size, redirect, domain, DNS, GeoIP, and RDAP limits.
 - `RATE_LIMIT_*` — configure the per-process request window for `GET /api/domain`.
+- `CORS_ORIGINS` — configure the explicit frontend origins allowed to call the API.
 
 The complete list of supported settings and safe defaults is available in `back/.env.example`.
 
@@ -87,6 +88,8 @@ The API is available at `http://localhost:8000`.
 Application logs are emitted as one JSON object per line. Each response includes an `X-Request-ID` header that can be used to correlate HTTP and analysis logs.
 
 The domain analysis endpoint returns HTTP 429 after the configured number of requests from one client address within the rate-limit window. The limiter is in-memory and therefore applies separately in each backend process; use a shared proxy or distributed limiter for a multi-instance deployment.
+
+Local frontend requests from `http://localhost:5173` are allowed by default. Set `CORS_ORIGINS` to the exact development or production origins used by the deployment; wildcard origins are intentionally not required.
 
 ## Run locally
 
@@ -168,5 +171,6 @@ Frontend checks and production build are independent from the backend:
 ```bash
 make front-typecheck
 make front-lint
+make front-test
 make front-build
 ```
