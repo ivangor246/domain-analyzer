@@ -6,6 +6,7 @@ from typing import Any, Awaitable, TypeVar
 
 from app.core.config import settings
 from app.core.exceptions import AnalysisTimeoutError, DomainValidationError
+from app.core.metrics import record_analysis, record_analysis_check
 from app.schemas.dns import DNSSchema, PropagationSchema
 from app.schemas.domain import AnalysisError, DomainSchema
 from app.schemas.geoip import GeoIPRecord
@@ -137,6 +138,8 @@ async def _run_check(
         check_status = 'failed'
         raise
     finally:
+        duration_seconds = perf_counter() - started_at
+        record_analysis_check(check, check_status, duration_seconds)
         logger.info(
             'domain analysis check completed',
             extra={
@@ -145,7 +148,7 @@ async def _run_check(
                 'analysis_id': analysis_id,
                 'task_id': task_id,
                 'check_status': check_status,
-                'check_duration_ms': round((perf_counter() - started_at) * 1000, 2),
+                'check_duration_ms': round(duration_seconds * 1000, 2),
             },
         )
 
@@ -230,6 +233,8 @@ async def _lookup_geoip(
     remaining = deadline - asyncio.get_running_loop().time()
     if remaining <= 0:
         errors.append(_analysis_error('geoip', timed_out=True))
+        duration_seconds = perf_counter() - started_at
+        record_analysis_check('geoip', 'timeout', duration_seconds)
         logger.info(
             'domain analysis check completed',
             extra={
@@ -238,7 +243,7 @@ async def _lookup_geoip(
                 'analysis_id': analysis_id,
                 'task_id': task_id,
                 'check_status': 'timeout',
-                'check_duration_ms': round((perf_counter() - started_at) * 1000, 2),
+                'check_duration_ms': round(duration_seconds * 1000, 2),
             },
         )
         return {}
@@ -258,6 +263,8 @@ async def _lookup_geoip(
         errors.append(_analysis_error('geoip'))
         return {}
     finally:
+        duration_seconds = perf_counter() - started_at
+        record_analysis_check('geoip', check_status, duration_seconds)
         logger.info(
             'domain analysis check completed',
             extra={
@@ -266,7 +273,7 @@ async def _lookup_geoip(
                 'analysis_id': analysis_id,
                 'task_id': task_id,
                 'check_status': check_status,
-                'check_duration_ms': round((perf_counter() - started_at) * 1000, 2),
+                'check_duration_ms': round(duration_seconds * 1000, 2),
             },
         )
 
@@ -276,6 +283,27 @@ class DomainService:
         self.dependencies = dependencies or DomainDependencies()
 
     async def analyze(
+        self,
+        domain: str,
+        analysis_id: str | None = None,
+        task_id: str | None = None,
+    ) -> DomainSchema:
+        started_at = perf_counter()
+        analysis_status = 'failed'
+        try:
+            result = await self._analyze(domain, analysis_id=analysis_id, task_id=task_id)
+            analysis_status = 'partial' if result.analysis_errors else 'success'
+            return result
+        except AnalysisTimeoutError:
+            analysis_status = 'timeout'
+            raise
+        except asyncio.CancelledError:
+            analysis_status = 'cancelled'
+            raise
+        finally:
+            record_analysis(analysis_status, perf_counter() - started_at)
+
+    async def _analyze(
         self,
         domain: str,
         analysis_id: str | None = None,

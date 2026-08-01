@@ -125,6 +125,14 @@ curl -i 'http://localhost:8000/api/health/ready'
 
 The readiness endpoint checks Redis and at least one responsive Celery worker. It returns HTTP 200 with `{"status":"ready", ...}` when both dependencies are available, or HTTP 503 with `{"status":"not_ready", ...}` otherwise.
 
+Process-local Prometheus-compatible metrics are available at:
+
+```bash
+curl 'http://localhost:8000/api/metrics'
+```
+
+The endpoint reports HTTP requests, rate-limit decisions, analysis durations, check outcomes, and Celery job outcomes. Metric labels do not contain domains, request IDs, or analysis IDs. Metrics are process-local; a multi-process deployment should scrape each backend process or aggregate them at the monitoring layer.
+
 API errors use a consistent JSON shape:
 
 ```json

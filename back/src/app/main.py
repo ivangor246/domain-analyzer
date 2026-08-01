@@ -21,6 +21,7 @@ from app.api.root import root_router
 from app.core.config import settings
 from app.core.exceptions import AppError, RateLimitUnavailableError
 from app.core.logging_config import configure_logging, request_id_context
+from app.core.metrics import record_http_request, record_rate_limit
 from app.core.rate_limit import RateLimiter, RedisRateLimiter
 
 logger = getLogger(__name__)
@@ -29,6 +30,12 @@ _RATE_LIMITED_PATHS = {
     ('GET', '/api/domain'),
     ('POST', '/api/analyses'),
 }
+
+
+def _metric_path(request: Request) -> str:
+    route = request.scope.get('route')
+    route_path = getattr(route, 'path', None)
+    return route_path if isinstance(route_path, str) else request.url.path
 
 
 @asynccontextmanager
@@ -94,6 +101,7 @@ def create_app() -> FastAPI:
             try:
                 decision = await rate_limiter.check(client_key)
             except RateLimitUnavailableError as exc:
+                record_rate_limit('unavailable')
                 return JSONResponse(
                     status_code=exc.status_code,
                     content={'code': exc.code, 'message': str(exc)},
@@ -103,6 +111,7 @@ def create_app() -> FastAPI:
                 'X-RateLimit-Remaining': str(decision.remaining),
             }
             if not decision.allowed:
+                record_rate_limit('rejected')
                 rate_headers['Retry-After'] = str(decision.retry_after)
                 return JSONResponse(
                     status_code=429,
@@ -113,6 +122,7 @@ def create_app() -> FastAPI:
                     headers=rate_headers,
                 )
 
+            record_rate_limit('allowed')
             response = await call_next(request)
             for name, value in rate_headers.items():
                 response.headers[name] = value
@@ -129,6 +139,8 @@ def create_app() -> FastAPI:
         try:
             response = await call_next(request)
         except Exception:
+            duration_seconds = perf_counter() - started_at
+            record_http_request(request.method, _metric_path(request), 500, duration_seconds)
             logger.error(
                 'request failed',
                 extra={
@@ -136,11 +148,13 @@ def create_app() -> FastAPI:
                     'method': request.method,
                     'path': request.url.path,
                     'status_code': 500,
-                    'duration_ms': round((perf_counter() - started_at) * 1000, 2),
+                    'duration_ms': round(duration_seconds * 1000, 2),
                 },
             )
             raise
         else:
+            duration_seconds = perf_counter() - started_at
+            record_http_request(request.method, _metric_path(request), response.status_code, duration_seconds)
             response.headers['X-Request-ID'] = request_id
             logger.info(
                 'request completed',
@@ -149,7 +163,7 @@ def create_app() -> FastAPI:
                     'method': request.method,
                     'path': request.url.path,
                     'status_code': response.status_code,
-                    'duration_ms': round((perf_counter() - started_at) * 1000, 2),
+                    'duration_ms': round(duration_seconds * 1000, 2),
                 },
             )
             return response

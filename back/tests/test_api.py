@@ -53,6 +53,15 @@ class ApiTestCase(unittest.IsolatedAsyncioTestCase):
             {'status': 'not_ready', 'checks': {'redis': 'ok', 'worker': 'unavailable'}},
         )
 
+    async def test_metrics_endpoint_returns_prometheus_text(self) -> None:
+        response = await self.client.get('/api/metrics')
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.headers['content-type'].startswith('text/plain; version=0.0.4'))
+        self.assertIn('# TYPE domain_analyzer_http_requests_total counter', response.text)
+        self.assertIn('# EOF', response.text)
+        self.assertNotIn('example.com', response.text)
+
     async def test_invalid_domain_returns_consistent_error(self) -> None:
         response = await self.client.get('/api/domain', params={'d': 'invalid'})
 
