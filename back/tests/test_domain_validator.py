@@ -15,3 +15,9 @@ class DomainValidatorTestCase(unittest.TestCase):
             with self.subTest(domain=domain):
                 with self.assertRaises(ValueError):
                     validate_domain(domain)
+
+    def test_domain_length_is_limited(self) -> None:
+        domain = f'{"a" * 63}.{"b" * 63}.{"c" * 63}.{"d" * 63}.com'
+
+        with self.assertRaises(ValueError):
+            validate_domain(domain)
