@@ -188,6 +188,7 @@ Run the backend checks from `back/`:
 
 ```bash
 cd back
+poetry check --lock
 PYTHONPATH=src python -m unittest discover -s tests
 poetry run ruff check src
 poetry run ruff format --check src

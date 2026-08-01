@@ -1,5 +1,8 @@
 name: Backend
 
+permissions:
+  contents: read
+
 on:
   push:
     paths:
@@ -28,6 +31,10 @@ jobs:
       - name: Install Poetry
         run: pip install poetry==2.1.3
 
+      - name: Check lock file
+        working-directory: back
+        run: poetry check --lock
+
       - name: Install backend dependencies
         working-directory: back
         run: poetry install --no-interaction
@@ -43,3 +50,30 @@ jobs:
       - name: Check formatting
         working-directory: back
         run: poetry run ruff format --check src tests
+
+      - name: Build backend image
+        working-directory: back
+        run: docker build --tag domain-analyzer-back:ci .
+
+      - name: Smoke test hardened backend image
+        run: |
+          set -eu
+          docker run --detach \
+            --name domain-analyzer-back-smoke \
+            --publish 8000:8000 \
+            --read-only \
+            --tmpfs /tmp:size=64m,mode=1777,noexec,nosuid \
+            --cap-drop ALL \
+            --security-opt no-new-privileges:true \
+            --env DOCS=False \
+            --env DEV_MODE=False \
+            domain-analyzer-back:ci
+          trap 'docker rm --force domain-analyzer-back-smoke' EXIT
+          test "$(docker image inspect domain-analyzer-back:ci --format '{{.Config.User}}')" = "app"
+          for attempt in $(seq 1 15); do
+            if curl --fail --silent http://127.0.0.1:8000/api/health > /dev/null; then
+              exit 0
+            fi
+            sleep 1
+          done
+          exit 1

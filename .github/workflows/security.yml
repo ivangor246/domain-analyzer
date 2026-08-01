@@ -1,5 +1,8 @@
 name: Security
 
+permissions:
+  contents: read
+
 on:
   schedule:
     - cron: '17 3 * * 1'
@@ -8,8 +11,27 @@ on:
     paths:
       - 'back/pyproject.toml'
       - 'back/poetry.lock'
+      - 'back/Dockerfile'
+      - 'back/.dockerignore'
+      - 'back/docker-compose.yml'
       - 'front/package.json'
       - 'front/package-lock.json'
+      - 'front/Dockerfile'
+      - 'front/nginx.conf'
+      - 'SECURITY.md'
+      - '.github/workflows/security.yml'
+  pull_request:
+    paths:
+      - 'back/pyproject.toml'
+      - 'back/poetry.lock'
+      - 'back/Dockerfile'
+      - 'back/.dockerignore'
+      - 'back/docker-compose.yml'
+      - 'front/package.json'
+      - 'front/package-lock.json'
+      - 'front/Dockerfile'
+      - 'front/nginx.conf'
+      - 'SECURITY.md'
       - '.github/workflows/security.yml'
 
 jobs:
@@ -49,6 +71,10 @@ jobs:
 
       - name: Install Poetry
         run: pip install poetry==2.1.3
+
+      - name: Check lock file
+        working-directory: back
+        run: poetry check --lock
 
       - name: Install backend dependencies
         working-directory: back
