@@ -1,6 +1,28 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { analyzeDomain } from './client'
+import { analyzeDomain, cancelAnalysis, createAnalysis, getAnalysis, pollAnalysis } from './client'
+import type { AnalysisJob } from './types'
+
+const analysisId = 'a'.repeat(32)
+
+function job(overrides: Partial<AnalysisJob> = {}): AnalysisJob {
+  return {
+    id: analysisId,
+    domain: 'example.com',
+    status: 'queued',
+    created_at: '2026-08-01T10:00:00Z',
+    result: null,
+    error: null,
+    ...overrides,
+  }
+}
+
+function jsonResponse(body: unknown, status = 200) {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { 'Content-Type': 'application/json' },
+  })
+}
 
 describe('analyzeDomain', () => {
   beforeEach(() => {
@@ -31,5 +53,64 @@ describe('analyzeDomain', () => {
       code: 'invalid_domain',
       message: 'Invalid domain format',
     })
+  })
+
+  it('creates an asynchronous analysis with an idempotency key', async () => {
+    const response = job()
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse(response, 202))
+    vi.stubGlobal('fetch', fetchMock)
+
+    await expect(createAnalysis('example.com')).resolves.toEqual(response)
+    expect(fetchMock).toHaveBeenCalledWith(
+      'http://localhost:8000/api/analyses',
+      expect.objectContaining({
+        method: 'POST',
+        body: JSON.stringify({ domain: 'example.com' }),
+        headers: expect.objectContaining({
+          Accept: 'application/json',
+          'Content-Type': 'application/json',
+          'Idempotency-Key': expect.stringMatching(/^domain-analyzer-/),
+        }),
+      }),
+    )
+  })
+
+  it('gets and cancels an asynchronous analysis', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(jsonResponse(job({ status: 'running' })))
+      .mockResolvedValueOnce(jsonResponse(job({ status: 'cancelled' })))
+    vi.stubGlobal('fetch', fetchMock)
+
+    await expect(getAnalysis('job/id')).resolves.toMatchObject({ status: 'running' })
+    await expect(cancelAnalysis(analysisId)).resolves.toMatchObject({ status: 'cancelled' })
+
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      1,
+      'http://localhost:8000/api/analyses/job%2Fid',
+      expect.objectContaining({ headers: { Accept: 'application/json' } }),
+    )
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      2,
+      `http://localhost:8000/api/analyses/${analysisId}/cancel`,
+      expect.objectContaining({ method: 'POST' }),
+    )
+  })
+
+  it('polls until the analysis reaches a terminal state', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(jsonResponse(job({ status: 'queued' })))
+      .mockResolvedValueOnce(jsonResponse(job({ status: 'running' })))
+      .mockResolvedValueOnce(jsonResponse(job({ status: 'completed' })))
+    vi.stubGlobal('fetch', fetchMock)
+    const statuses: string[] = []
+
+    await expect(
+      pollAnalysis(analysisId, undefined, (currentJob) => statuses.push(currentJob.status), 0),
+    ).resolves.toMatchObject({ status: 'completed' })
+
+    expect(statuses).toEqual(['queued', 'running', 'completed'])
+    expect(fetchMock).toHaveBeenCalledTimes(3)
   })
 })

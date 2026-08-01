@@ -156,6 +156,17 @@ export interface DomainAnalysis {
   analysis_errors: AnalysisError[]
 }
 
+export type AnalysisJobStatus = 'queued' | 'running' | 'completed' | 'failed' | 'cancelled'
+
+export interface AnalysisJob {
+  id: string
+  domain: string
+  status: AnalysisJobStatus
+  created_at: string
+  result: DomainAnalysis | null
+  error: ErrorPayload | null
+}
+
 export interface ErrorDetails {
   loc?: string[]
   message?: string

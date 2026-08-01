@@ -1,44 +1,112 @@
 import { useRef, useState, type ChangeEvent, type FormEvent } from 'react'
 
-import { analyzeDomain, ApiError } from './api/client'
-import type { DomainAnalysis } from './api/types'
+import { ApiError, cancelAnalysis, createAnalysis, pollAnalysis } from './api/client'
+import type { AnalysisJob, AnalysisJobStatus, DomainAnalysis } from './api/types'
 import AnalysisForm from './components/AnalysisForm'
 import AnalysisResults from './components/AnalysisResults'
 
 type ViewState =
   | { status: 'idle' }
-  | { status: 'loading' }
+  | { status: 'loading'; phase: Extract<AnalysisJobStatus, 'queued' | 'running'>; jobId: string | null }
   | { status: 'success'; analysis: DomainAnalysis }
   | { status: 'error'; error: Error }
 
 function isAbortError(error: unknown) {
-  return error instanceof DOMException && error.name === 'AbortError'
+  return (error instanceof DOMException || error instanceof Error) && error.name === 'AbortError'
 }
 
 function errorMessage(error: Error) {
   if (error instanceof ApiError && error.status === 429) {
     return `${error.message} The rate limit will reset shortly.`
   }
+  if (error instanceof ApiError && error.status === 503) {
+    return `${error.message} Check that Redis and the analysis worker are running.`
+  }
 
   return error.message
+}
+
+function statusMessage(view: ViewState) {
+  if (view.status !== 'loading') {
+    return 'Results stay in your browser until you analyze another domain.'
+  }
+
+  return view.phase === 'queued' ? 'Waiting for an analysis worker…' : 'Collecting public domain signals…'
+}
+
+function isActiveJob(job: AnalysisJob): job is AnalysisJob & { status: 'queued' | 'running' } {
+  return job.status === 'queued' || job.status === 'running'
 }
 
 function App() {
   const [domain, setDomain] = useState('')
   const [view, setView] = useState<ViewState>({ status: 'idle' })
   const controllerRef = useRef<AbortController | null>(null)
+  const jobIdRef = useRef<string | null>(null)
+  const runTokenRef = useRef(0)
+
+  const requestCancellation = (jobId: string) => {
+    void cancelAnalysis(jobId).catch(() => undefined)
+  }
 
   const runAnalysis = async (target: string) => {
+    const runToken = runTokenRef.current + 1
+    runTokenRef.current = runToken
     controllerRef.current?.abort()
+    if (jobIdRef.current) {
+      requestCancellation(jobIdRef.current)
+    }
+    jobIdRef.current = null
+
     const controller = new AbortController()
     controllerRef.current = controller
-    setView({ status: 'loading' })
+    setView({ status: 'loading', phase: 'queued', jobId: null })
 
     try {
-      const analysis = await analyzeDomain(target, controller.signal)
-      setView({ status: 'success', analysis })
+      const initialJob = await createAnalysis(target)
+      if (runTokenRef.current !== runToken) {
+        requestCancellation(initialJob.id)
+        return
+      }
+
+      jobIdRef.current = initialJob.id
+      if (isActiveJob(initialJob)) {
+        setView({ status: 'loading', phase: initialJob.status, jobId: initialJob.id })
+      }
+
+      const finalJob = await pollAnalysis(
+        initialJob.id,
+        controller.signal,
+        (job) => {
+          if (runTokenRef.current !== runToken || !isActiveJob(job)) {
+            return
+          }
+          setView({ status: 'loading', phase: job.status, jobId: job.id })
+        },
+      )
+
+      if (runTokenRef.current !== runToken) {
+        return
+      }
+
+      if (finalJob.status === 'completed') {
+        if (!finalJob.result) {
+          throw new ApiError('The analysis completed without a result.', 502, 'missing_analysis_result')
+        }
+        setView({ status: 'success', analysis: finalJob.result })
+      } else if (finalJob.status === 'failed') {
+        const error = finalJob.error
+        throw new ApiError(
+          error?.message ?? 'The analysis worker failed to produce a result.',
+          502,
+          error?.code ?? 'analysis_failed',
+          error?.details,
+        )
+      } else {
+        setView({ status: 'idle' })
+      }
     } catch (error) {
-      if (isAbortError(error)) {
+      if (runTokenRef.current !== runToken || isAbortError(error)) {
         return
       }
 
@@ -47,6 +115,9 @@ function App() {
     } finally {
       if (controllerRef.current === controller) {
         controllerRef.current = null
+      }
+      if (runTokenRef.current === runToken) {
+        jobIdRef.current = null
       }
     }
   }
@@ -64,9 +135,15 @@ function App() {
   }
 
   const handleCancel = () => {
+    runTokenRef.current += 1
     controllerRef.current?.abort()
     controllerRef.current = null
+    const jobId = jobIdRef.current
+    jobIdRef.current = null
     setView({ status: 'idle' })
+    if (jobId) {
+      requestCancellation(jobId)
+    }
   }
 
   const loading = view.status === 'loading'
@@ -89,7 +166,7 @@ function App() {
             onSubmit={handleSubmit}
           />
           <p className="request-status" role="status" aria-live="polite" aria-busy={loading}>
-            {loading ? 'Collecting public domain signals…' : 'Results stay in your browser until you analyze another domain.'}
+            {statusMessage(view)}
           </p>
         </section>
 
