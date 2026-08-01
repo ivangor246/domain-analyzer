@@ -217,6 +217,8 @@ make front-test
 make front-build
 ```
 
+The frontend validates successful analysis and job responses at runtime. If the API returns an incompatible payload, it shows a controlled error instead of rendering untrusted malformed data.
+
 Build the frontend as a standalone production container:
 
 ```bash

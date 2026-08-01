@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { analyzeDomain, cancelAnalysis, createAnalysis, getAnalysis, pollAnalysis } from './client'
-import type { AnalysisJob } from './types'
+import type { AnalysisJob, DomainAnalysis } from './types'
 
 const analysisId = 'a'.repeat(32)
 
@@ -13,6 +13,39 @@ function job(overrides: Partial<AnalysisJob> = {}): AnalysisJob {
     created_at: '2026-08-01T10:00:00Z',
     result: null,
     error: null,
+    ...overrides,
+  }
+}
+
+function analysis(overrides: Partial<DomainAnalysis> = {}): DomainAnalysis {
+  return {
+    domain: 'example.com',
+    rdap_server: null,
+    status: [],
+    nameservers: [],
+    registrar: null,
+    registration_date: null,
+    expiration_date: null,
+    updated_date: null,
+    whois_server: null,
+    dns: {
+      A: [],
+      AAAA: [],
+      MX: [],
+      TXT: [],
+      CNAME: [],
+      NS: [],
+      SOA: null,
+      CAA: [],
+      PTR: {},
+      propagation: null,
+    },
+    geoip: {},
+    http: null,
+    ssl: null,
+    ports: null,
+    latency: null,
+    analysis_errors: [],
     ...overrides,
   }
 }
@@ -30,7 +63,7 @@ describe('analyzeDomain', () => {
   })
 
   it('returns the typed analysis response', async () => {
-    const response = { domain: 'example.com', analysis_errors: [] }
+    const response = analysis()
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify(response), { status: 200 })))
 
     await expect(analyzeDomain('example.com')).resolves.toEqual(response)
@@ -38,6 +71,16 @@ describe('analyzeDomain', () => {
       'http://localhost:8000/api/domain?d=example.com',
       expect.objectContaining({ headers: { Accept: 'application/json' } }),
     )
+  })
+
+  it('rejects a malformed successful response', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse({ domain: 'example.com', analysis_errors: [] })))
+
+    await expect(analyzeDomain('example.com')).rejects.toMatchObject({
+      name: 'ApiError',
+      status: 200,
+      code: 'invalid_response',
+    })
   })
 
   it('converts backend errors to ApiError', async () => {
@@ -73,6 +116,28 @@ describe('analyzeDomain', () => {
         }),
       }),
     )
+  })
+
+  it('rejects a malformed asynchronous job response', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        jsonResponse({
+          id: analysisId,
+          domain: 'example.com',
+          status: 'unknown',
+          created_at: '2026-08-01T10:00:00Z',
+          result: null,
+          error: null,
+        }),
+      ),
+    )
+
+    await expect(getAnalysis(analysisId)).rejects.toMatchObject({
+      name: 'ApiError',
+      status: 200,
+      code: 'invalid_response',
+    })
   })
 
   it('gets and cancels an asynchronous analysis', async () => {

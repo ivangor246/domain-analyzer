@@ -1,4 +1,5 @@
 import type { AnalysisJob, AnalysisJobStatus, DomainAnalysis, ErrorPayload } from './types'
+import { isAnalysisJob, isDomainAnalysis, isErrorPayload } from './validators'
 
 const API_URL = (import.meta.env.VITE_API_URL || 'http://localhost:8000').replace(/\/+$/, '')
 
@@ -16,24 +17,19 @@ export class ApiError extends Error {
   }
 }
 
-function isErrorPayload(value: unknown): value is ErrorPayload {
-  if (!value || typeof value !== 'object') {
-    return false
-  }
-
-  const payload = value as Partial<ErrorPayload>
-  return typeof payload.code === 'string' && typeof payload.message === 'string'
-}
-
 export async function analyzeDomain(domain: string, signal?: AbortSignal): Promise<DomainAnalysis> {
   const endpoint = `${API_URL}/api/domain?d=${encodeURIComponent(domain)}`
   return requestJson<DomainAnalysis>(endpoint, {
     headers: { Accept: 'application/json' },
     signal,
-  })
+  }, isDomainAnalysis)
 }
 
-async function requestJson<T>(endpoint: string, init?: RequestInit): Promise<T> {
+async function requestJson<T>(
+  endpoint: string,
+  init: RequestInit | undefined,
+  validate: (value: unknown) => value is T,
+): Promise<T> {
   let response: Response
 
   try {
@@ -53,7 +49,11 @@ async function requestJson<T>(endpoint: string, init?: RequestInit): Promise<T> 
     throw new ApiError('The backend returned an unexpected error.', response.status, 'unknown_error')
   }
 
-  return body as T
+  if (!validate(body)) {
+    throw new ApiError('The backend returned an invalid response.', response.status, 'invalid_response')
+  }
+
+  return body
 }
 
 function idempotencyKey() {
@@ -70,21 +70,21 @@ export async function createAnalysis(domain: string): Promise<AnalysisJob> {
       'Idempotency-Key': idempotencyKey(),
     },
     body: JSON.stringify({ domain }),
-  })
+  }, isAnalysisJob)
 }
 
 export async function getAnalysis(analysisId: string, signal?: AbortSignal): Promise<AnalysisJob> {
   return requestJson<AnalysisJob>(`${API_URL}/api/analyses/${encodeURIComponent(analysisId)}`, {
     headers: { Accept: 'application/json' },
     signal,
-  })
+  }, isAnalysisJob)
 }
 
 export async function cancelAnalysis(analysisId: string): Promise<AnalysisJob> {
   return requestJson<AnalysisJob>(`${API_URL}/api/analyses/${encodeURIComponent(analysisId)}/cancel`, {
     method: 'POST',
     headers: { Accept: 'application/json' },
-  })
+  }, isAnalysisJob)
 }
 
 function isTerminalStatus(status: AnalysisJobStatus) {
