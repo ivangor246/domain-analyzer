@@ -7,7 +7,7 @@ import httpx
 from app.core.config import settings
 from app.core.exceptions import TargetNotAllowedError
 from app.schemas.http import HTTPProbeResult, HTTPSchema
-from app.utils.http import read_limited_response, run_with_retries
+from app.utils.http import read_limited_response, retry_after_seconds, run_with_retries
 
 from .network_guard import NetworkTargetGuard
 
@@ -46,6 +46,9 @@ async def _request(client: httpx.AsyncClient, url: str) -> httpx.Response:
         retries=settings.HTTP_MAX_RETRIES,
         should_retry=lambda exc: isinstance(exc, (httpx.NetworkError, httpx.TimeoutException)),
         backoff_seconds=settings.RETRY_BACKOFF_SECONDS,
+        jitter_seconds=settings.RETRY_JITTER_SECONDS,
+        retry_after=retry_after_seconds,
+        max_delay_seconds=settings.RETRY_MAX_DELAY_SECONDS,
     )
 
 

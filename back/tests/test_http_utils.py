@@ -1,5 +1,5 @@
 import unittest
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, patch
 
 import httpx
 
@@ -8,6 +8,7 @@ from app.utils.http import (
     is_retryable_http_error,
     parse_json,
     read_limited_response,
+    retry_after_seconds,
     run_with_retries,
 )
 
@@ -47,6 +48,55 @@ class HTTPUtilsTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result, 'ok')
         self.assertEqual(operation.await_count, 2)
 
+    async def test_run_with_retries_honors_retry_after_and_adds_jitter(self):
+        request = httpx.Request('GET', 'https://provider.example')
+        response = httpx.Response(429, headers={'Retry-After': '2'}, request=request)
+        operation = AsyncMock(
+            side_effect=[
+                httpx.HTTPStatusError('rate limited', request=request, response=response),
+                'ok',
+            ]
+        )
+
+        with (
+            patch('app.utils.http.random.uniform', return_value=0.25),
+            patch('app.utils.http.asyncio.sleep', new=AsyncMock()) as sleep,
+        ):
+            result = await run_with_retries(
+                operation,
+                retries=1,
+                should_retry=is_retryable_http_error,
+                backoff_seconds=0.1,
+                jitter_seconds=0.25,
+                retry_after=retry_after_seconds,
+                max_delay_seconds=10,
+            )
+
+        self.assertEqual(result, 'ok')
+        sleep.assert_awaited_once_with(2.25)
+
+    async def test_run_with_retries_caps_provider_delay(self):
+        request = httpx.Request('GET', 'https://provider.example')
+        response = httpx.Response(503, headers={'Retry-After': '120'}, request=request)
+        operation = AsyncMock(
+            side_effect=[
+                httpx.HTTPStatusError('unavailable', request=request, response=response),
+                'ok',
+            ]
+        )
+
+        with patch('app.utils.http.asyncio.sleep', new=AsyncMock()) as sleep:
+            await run_with_retries(
+                operation,
+                retries=1,
+                should_retry=is_retryable_http_error,
+                backoff_seconds=0,
+                retry_after=retry_after_seconds,
+                max_delay_seconds=3,
+            )
+
+        sleep.assert_awaited_once_with(3)
+
     def test_is_retryable_http_error_distinguishes_status_codes(self):
         request = httpx.Request('GET', 'https://example.com')
         server_error = httpx.HTTPStatusError(
@@ -61,8 +111,34 @@ class HTTPUtilsTests(unittest.IsolatedAsyncioTestCase):
         )
 
         self.assertTrue(is_retryable_http_error(server_error))
+        self.assertTrue(
+            is_retryable_http_error(
+                httpx.HTTPStatusError(
+                    'rate limited',
+                    request=request,
+                    response=httpx.Response(429, request=request),
+                )
+            )
+        )
         self.assertFalse(is_retryable_http_error(client_error))
         self.assertFalse(is_retryable_http_error(ValueError('invalid payload')))
+
+    def test_retry_after_supports_seconds_and_invalid_values(self):
+        request = httpx.Request('GET', 'https://example.com')
+        seconds_error = httpx.HTTPStatusError(
+            'rate limited',
+            request=request,
+            response=httpx.Response(429, headers={'Retry-After': '2.5'}, request=request),
+        )
+        invalid_error = httpx.HTTPStatusError(
+            'rate limited',
+            request=request,
+            response=httpx.Response(429, headers={'Retry-After': 'later'}, request=request),
+        )
+
+        self.assertEqual(retry_after_seconds(seconds_error), 2.5)
+        self.assertIsNone(retry_after_seconds(invalid_error))
+        self.assertIsNone(retry_after_seconds(ValueError('not an HTTP error')))
 
 
 if __name__ == '__main__':

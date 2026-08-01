@@ -7,7 +7,13 @@ from pydantic import BaseModel, Field
 
 from app.core.config import settings
 from app.core.exceptions import RDAPError
-from app.utils.http import is_retryable_http_error, parse_json, read_limited_response, run_with_retries
+from app.utils.http import (
+    is_retryable_http_error,
+    parse_json,
+    read_limited_response,
+    retry_after_seconds,
+    run_with_retries,
+)
 
 from .network_guard import NetworkTargetGuard
 
@@ -65,6 +71,9 @@ class RDAPClient:
                         retries=settings.RDAP_MAX_RETRIES,
                         should_retry=is_retryable_http_error,
                         backoff_seconds=settings.RETRY_BACKOFF_SECONDS,
+                        jitter_seconds=settings.RETRY_JITTER_SECONDS,
+                        retry_after=retry_after_seconds,
+                        max_delay_seconds=settings.RETRY_MAX_DELAY_SECONDS,
                     )
                     if not isinstance(data, dict):
                         continue
