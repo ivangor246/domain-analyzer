@@ -166,6 +166,17 @@ function generate(document) {
 
 const input = option('--input', process.env.OPENAPI_INPUT ?? 'http://localhost:8000/api/docs.json')
 const output = option('--output', process.env.OPENAPI_OUTPUT ?? defaultOutput)
+const checkOnly = process.argv.includes('--check')
 const document = await readDocument(input)
-await writeFile(output, generate(document), 'utf8')
-console.log(`Generated ${path.relative(process.cwd(), output)}`)
+const generated = generate(document)
+
+if (checkOnly) {
+  const current = await readFile(output, 'utf8').catch(() => null)
+  if (current !== generated) {
+    throw new Error(`Generated API types are out of date: ${path.relative(process.cwd(), output)}`)
+  }
+  console.log(`API types are up to date: ${path.relative(process.cwd(), output)}`)
+} else {
+  await writeFile(output, generated, 'utf8')
+  console.log(`Generated ${path.relative(process.cwd(), output)}`)
+}

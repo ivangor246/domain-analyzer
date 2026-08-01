@@ -62,3 +62,6 @@ front-check: front-typecheck front-lint front-test
 
 api-types:
 	cd back && PYTHONPATH=src poetry run python scripts/export_openapi.py | node ../front/scripts/generate-api-types.mjs --input -
+
+api-types-check:
+	cd back && PYTHONPATH=src poetry run python scripts/export_openapi.py | node ../front/scripts/generate-api-types.mjs --input - --check
