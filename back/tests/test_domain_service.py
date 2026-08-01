@@ -1,0 +1,94 @@
+import unittest
+
+from app.schemas.dns import PropagationSchema
+from app.schemas.http import HTTPSchema
+from app.schemas.latency import LatencySchema
+from app.schemas.ports import PortsSchema
+from app.schemas.ssl import SSLSchema
+from app.services.dns_resolver import DNSRecords
+from app.services.domain import DomainDependencies, DomainService
+
+
+class FakeGuard:
+    @staticmethod
+    async def validate(host: str) -> None:
+        return None
+
+
+class FakeBootstrap:
+    @classmethod
+    async def get_instance(cls):
+        return cls()
+
+    def get_servers(self, domain: str) -> tuple[list[str], str]:
+        return ['https://rdap.test'], domain
+
+
+class FakeRDAP:
+    @staticmethod
+    async def query(domain: str, servers: list[str]):
+        raise RuntimeError('RDAP unavailable')
+
+
+class FakeDNS:
+    @staticmethod
+    async def resolve(domain: str) -> DNSRecords:
+        return DNSRecords(A=['8.8.8.8'])
+
+
+class FakePropagation:
+    @staticmethod
+    async def check(domain: str) -> PropagationSchema:
+        return PropagationSchema(consistent=True)
+
+
+class FakeHTTP:
+    @staticmethod
+    async def probe(domain: str) -> HTTPSchema:
+        return HTTPSchema()
+
+
+class FakeSSL:
+    @staticmethod
+    async def check(domain: str) -> SSLSchema:
+        return SSLSchema(valid=True)
+
+
+class FakePorts:
+    @staticmethod
+    async def scan(host: str) -> PortsSchema:
+        return PortsSchema()
+
+
+class FakeLatency:
+    @staticmethod
+    async def measure(host: str) -> LatencySchema:
+        return LatencySchema()
+
+
+class FakeGeoIP:
+    @staticmethod
+    async def lookup(ips: list[str]):
+        return {}
+
+
+class DomainServiceTestCase(unittest.IsolatedAsyncioTestCase):
+    async def test_failed_check_does_not_hide_successful_results(self) -> None:
+        dependencies = DomainDependencies(
+            rdap_bootstrap=FakeBootstrap,
+            rdap_client=FakeRDAP,
+            dns_resolver=FakeDNS,
+            dns_propagation=FakePropagation,
+            geoip_service=FakeGeoIP,
+            http_service=FakeHTTP,
+            ssl_service=FakeSSL,
+            port_scanner=FakePorts,
+            latency_service=FakeLatency,
+            network_guard=FakeGuard,
+        )
+
+        result = await DomainService(dependencies).analyze('example.com')
+
+        self.assertEqual(result.dns.A, ['8.8.8.8'])
+        self.assertIsNone(result.rdap_server)
+        self.assertEqual({error.check for error in result.analysis_errors}, {'rdap'})

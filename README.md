@@ -134,11 +134,13 @@ When `DOCS=True`, interactive API documentation is available at:
 Run the backend checks from `back/`:
 
 ```bash
+cd back
+PYTHONPATH=src python -m unittest discover -s tests
 poetry run ruff check src
 poetry run ruff format --check src
 ```
 
-Automated tests are not part of the repository yet. New behavior should include tests as the project evolves.
+The backend test suite uses Python's standard `unittest` runner and avoids network-dependent checks by replacing external services with test doubles.
 
 ## Frontend
 
