@@ -32,7 +32,7 @@ celery = "^5.6.3"
 redis = "^6.2.0"
 
 [tool.poetry.group.dev.dependencies]
-ruff = "^0.15.0"
+ruff = "^0.16.0"
 coverage = "^7.9.1"
 
 [tool.ruff]
