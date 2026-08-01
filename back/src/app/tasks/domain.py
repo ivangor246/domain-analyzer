@@ -3,7 +3,13 @@ from time import perf_counter
 from typing import Any
 
 from app.core.celery_app import celery_app
+from app.core.config import settings
 from app.core.metrics import record_job
+from app.services.analysis_concurrency import (
+    AnalysisConcurrencyBusyError,
+    AnalysisConcurrencyUnavailableError,
+    run_with_concurrency_limit,
+)
 from app.services.domain import DomainService
 
 
@@ -13,9 +19,21 @@ def analyze_domain_task(task, domain: str) -> dict[str, Any]:
     outcome = 'failed'
     task_id = task.request.id
     try:
-        result = asyncio.run(DomainService().analyze(domain, analysis_id=task_id, task_id=task_id))
+        result = asyncio.run(
+            run_with_concurrency_limit(
+                task_id,
+                lambda: DomainService().analyze(domain, analysis_id=task_id, task_id=task_id),
+            )
+        )
         outcome = 'completed'
         return result.model_dump(mode='json')
+    except (AnalysisConcurrencyBusyError, AnalysisConcurrencyUnavailableError) as exc:
+        outcome = 'retry'
+        raise task.retry(
+            exc=exc,
+            countdown=settings.ANALYSIS_CONCURRENCY_RETRY_SECONDS,
+            max_retries=settings.ANALYSIS_CONCURRENCY_MAX_RETRIES,
+        ) from exc
     except asyncio.CancelledError:
         outcome = 'cancelled'
         raise

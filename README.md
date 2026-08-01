@@ -67,6 +67,7 @@ The current configuration supports:
 - `ANALYSIS_TIMEOUT_SECONDS` — set the global deadline for one domain analysis;
 - `CELERY_*` — configure worker concurrency, task time limits, logging, and result retention;
 - `ANALYSIS_JOB_TTL_SECONDS` — configure how long queued-analysis metadata remains available in Redis;
+- `ANALYSIS_MAX_CONCURRENCY` and `ANALYSIS_CONCURRENCY_*` — configure the distributed Redis lease, retry delay, and retry limit for active analyses;
 - provider timeouts, retry counts, response-size, redirect, domain, DNS, GeoIP, and RDAP limits.
 - `RATE_LIMIT_*` — configure the request window, Redis backend, and local fallback for analysis requests;
 - `CORS_ORIGINS` — configure the explicit frontend origins allowed to call the API.
@@ -172,6 +173,8 @@ curl 'http://localhost:8000/api/analyses/<analysis-id>'
 ```
 
 The status changes through `queued`, `running`, and a terminal `completed`, `failed`, or `cancelled` state. A queued or running job can be cancelled with `POST /api/analyses/<analysis-id>/cancel`. Job metadata and Celery results expire automatically; PostgreSQL is not required for this workflow.
+
+Active analyses use a Redis-backed distributed concurrency limit. When all slots are occupied, Celery retries queued tasks after `ANALYSIS_CONCURRENCY_RETRY_SECONDS`; after `ANALYSIS_CONCURRENCY_MAX_RETRIES` attempts the job becomes failed. Leases expire automatically after `ANALYSIS_CONCURRENCY_LEASE_SECONDS`, which must be longer than `ANALYSIS_TIMEOUT_SECONDS`.
 
 When `DOCS=True`, interactive API documentation is available at:
 

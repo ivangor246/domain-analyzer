@@ -46,6 +46,10 @@ class Settings(BaseSettings):
     CELERY_RESULT_EXPIRES_SECONDS: int = Field(default=3600, gt=0)
     CELERY_WORKER_CONCURRENCY: int = Field(default=2, gt=0)
     ANALYSIS_JOB_TTL_SECONDS: int = Field(default=3600, gt=0)
+    ANALYSIS_MAX_CONCURRENCY: int = Field(default=2, gt=0)
+    ANALYSIS_CONCURRENCY_LEASE_SECONDS: float = Field(default=180, gt=0)
+    ANALYSIS_CONCURRENCY_RETRY_SECONDS: int = Field(default=5, gt=0)
+    ANALYSIS_CONCURRENCY_MAX_RETRIES: int = Field(default=30, ge=0)
     RATE_LIMIT_ENABLED: bool = True
     RATE_LIMIT_REDIS_ENABLED: bool = True
     RATE_LIMIT_REDIS_FALLBACK_ENABLED: bool = True
@@ -82,6 +86,8 @@ class Settings(BaseSettings):
             raise ValueError('CELERY_TASK_SOFT_TIME_LIMIT_SECONDS must be less than CELERY_TASK_TIME_LIMIT_SECONDS')
         if self.ANALYSIS_TIMEOUT_SECONDS >= self.CELERY_TASK_SOFT_TIME_LIMIT_SECONDS:
             raise ValueError('ANALYSIS_TIMEOUT_SECONDS must be less than CELERY_TASK_SOFT_TIME_LIMIT_SECONDS')
+        if self.ANALYSIS_CONCURRENCY_LEASE_SECONDS <= self.ANALYSIS_TIMEOUT_SECONDS:
+            raise ValueError('ANALYSIS_CONCURRENCY_LEASE_SECONDS must be greater than ANALYSIS_TIMEOUT_SECONDS')
         return self
 
 
