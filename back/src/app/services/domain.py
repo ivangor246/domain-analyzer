@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from typing import Any, Awaitable, TypeVar
 
 from app.core.exceptions import DomainValidationError
+from app.core.config import settings
 from app.schemas.dns import DNSSchema, PropagationSchema
 from app.schemas.domain import AnalysisError, DomainSchema
 from app.schemas.geoip import GeoIPRecord
@@ -166,7 +167,7 @@ class DomainService:
         ports_result = _result_or_default(raw_results, 'ports', PortsSchema, None, errors)
         latency_result = _result_or_default(raw_results, 'latency', LatencySchema, None, errors)
 
-        all_ips = dns_result.A + dns_result.AAAA
+        all_ips = (dns_result.A + dns_result.AAAA)[: settings.MAX_GEOIP_IPS]
         geoip_result = await _lookup_geoip(ips=all_ips, errors=errors, dependencies=self.dependencies)
 
         dns_schema = DNSSchema(

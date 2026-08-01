@@ -5,10 +5,10 @@ from datetime import datetime, timezone
 from cryptography import x509
 from cryptography.hazmat.primitives import hashes
 
+from app.core.config import settings
 from app.schemas.ssl import SSLCertificate, SSLSchema
 
 _PORT = 443
-_TIMEOUT = 10
 
 
 class SSLCertService:
@@ -40,13 +40,12 @@ class SSLCertService:
     @staticmethod
     async def _check_validity(domain: str) -> tuple[bool, str | None]:
         ctx = ssl.create_default_context()
+        writer = None
         try:
-            reader, writer = await asyncio.wait_for(
+            _, writer = await asyncio.wait_for(
                 asyncio.open_connection(domain, _PORT, ssl=ctx, server_hostname=domain),
-                timeout=_TIMEOUT,
+                timeout=settings.TLS_TIMEOUT_SECONDS,
             )
-            writer.close()
-            await writer.wait_closed()
             return True, None
         except ssl.SSLCertVerificationError as e:
             return False, e.verify_message
@@ -56,6 +55,13 @@ class SSLCertService:
             return False, 'Connection timed out'
         except OSError as e:
             return False, str(e)
+        finally:
+            if writer is not None:
+                writer.close()
+                try:
+                    await writer.wait_closed()
+                except Exception:
+                    pass
 
     @staticmethod
     async def _get_raw_cert(domain: str) -> tuple[bytes, str | None, str | None]:
@@ -63,21 +69,23 @@ class SSLCertService:
         ctx.check_hostname = False
         ctx.verify_mode = ssl.CERT_NONE
 
-        reader, writer = await asyncio.wait_for(
+        _, writer = await asyncio.wait_for(
             asyncio.open_connection(domain, _PORT, ssl=ctx, server_hostname=domain),
-            timeout=_TIMEOUT,
+            timeout=settings.TLS_TIMEOUT_SECONDS,
         )
-
-        ssl_obj: ssl.SSLObject = writer.get_extra_info('ssl_object')
-        cert_bin: bytes = ssl_obj.getpeercert(binary_form=True)
-        protocol: str | None = ssl_obj.version()
-        cipher_info: tuple | None = ssl_obj.cipher()
-        cipher_name: str | None = cipher_info[0] if cipher_info else None
-
-        writer.close()
-        await writer.wait_closed()
-
-        return cert_bin, protocol, cipher_name
+        try:
+            ssl_obj: ssl.SSLObject = writer.get_extra_info('ssl_object')
+            cert_bin: bytes = ssl_obj.getpeercert(binary_form=True)
+            protocol: str | None = ssl_obj.version()
+            cipher_info: tuple | None = ssl_obj.cipher()
+            cipher_name: str | None = cipher_info[0] if cipher_info else None
+            return cert_bin, protocol, cipher_name
+        finally:
+            writer.close()
+            try:
+                await writer.wait_closed()
+            except Exception:
+                pass
 
     @staticmethod
     def _parse_cert(cert_bin: bytes) -> SSLCertificate:

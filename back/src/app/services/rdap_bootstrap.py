@@ -5,6 +5,7 @@ from typing import ClassVar
 import httpx
 
 from app.core.config import settings
+from app.utils.http import is_retryable_http_error, parse_json, read_limited_response, run_with_retries
 
 
 class RDAPBootstrap:
@@ -27,10 +28,20 @@ class RDAPBootstrap:
         return cls._instance
 
     async def load(self):
-        async with httpx.AsyncClient(timeout=10) as client:
-            response = await client.get(settings.BOOTSTRAP_URL)
-            response.raise_for_status()
-            json_data = response.json()
+        async with httpx.AsyncClient(timeout=settings.BOOTSTRAP_TIMEOUT_SECONDS) as client:
+
+            async def fetch() -> object:
+                async with client.stream('GET', settings.BOOTSTRAP_URL) as response:
+                    response.raise_for_status()
+                    content = await read_limited_response(response, settings.HTTP_MAX_RESPONSE_BYTES)
+                return parse_json(content)
+
+            json_data = await run_with_retries(
+                fetch,
+                retries=settings.RDAP_MAX_RETRIES,
+                should_retry=is_retryable_http_error,
+                backoff_seconds=settings.RETRY_BACKOFF_SECONDS,
+            )
 
         mapping = {}
         for entry in json_data['services']:

@@ -4,14 +4,12 @@ from urllib.parse import urljoin, urlparse
 
 import httpx
 
+from app.core.config import settings
 from app.core.exceptions import TargetNotAllowedError
 from app.schemas.http import HTTPProbeResult, HTTPSchema
+from app.utils.http import read_limited_response, run_with_retries
 
 from .network_guard import NetworkTargetGuard
-
-_TIMEOUT = 10
-_MAX_REDIRECTS = 5
-_USER_AGENT = 'Mozilla/5.0 (compatible; DomainAnalyzer/1.0)'
 
 
 def _safe_redirect_url(current_url: str, location: str) -> str:
@@ -23,10 +21,32 @@ def _safe_redirect_url(current_url: str, location: str) -> str:
 
 
 async def _request(client: httpx.AsyncClient, url: str) -> httpx.Response:
-    response = await client.head(url)
-    if response.status_code == 405:
-        response = await client.get(url)
-    return response
+    async def request_once() -> httpx.Response:
+        async with client.stream('HEAD', url) as response:
+            content = await read_limited_response(response, settings.HTTP_MAX_RESPONSE_BYTES)
+            if response.status_code != 405:
+                return httpx.Response(
+                    status_code=response.status_code,
+                    headers=response.headers,
+                    content=content,
+                    request=response.request,
+                )
+
+        async with client.stream('GET', url) as response:
+            content = await read_limited_response(response, settings.HTTP_MAX_RESPONSE_BYTES)
+            return httpx.Response(
+                status_code=response.status_code,
+                headers=response.headers,
+                content=content,
+                request=response.request,
+            )
+
+    return await run_with_retries(
+        request_once,
+        retries=settings.HTTP_MAX_RETRIES,
+        should_retry=lambda exc: isinstance(exc, (httpx.NetworkError, httpx.TimeoutException)),
+        backoff_seconds=settings.RETRY_BACKOFF_SECONDS,
+    )
 
 
 async def _request_with_safe_redirects(
@@ -36,7 +56,7 @@ async def _request_with_safe_redirects(
     current_url = url
     redirect_chain: list[str] = []
 
-    for _ in range(_MAX_REDIRECTS + 1):
+    for _ in range(settings.HTTP_MAX_REDIRECTS + 1):
         response = await _request(client, current_url)
         if not response.is_redirect:
             return response, redirect_chain
@@ -72,10 +92,10 @@ class HTTPHeadersService:
             await NetworkTargetGuard.validate(parsed_url.hostname)
 
             async with httpx.AsyncClient(
-                timeout=_TIMEOUT,
+                timeout=settings.HTTP_TIMEOUT_SECONDS,
                 follow_redirects=False,
                 verify=False,
-                headers={'User-Agent': _USER_AGENT},
+                headers={'User-Agent': settings.HTTP_USER_AGENT},
             ) as client:
                 response, redirect_chain = await _request_with_safe_redirects(client, url)
         except Exception:

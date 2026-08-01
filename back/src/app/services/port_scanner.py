@@ -1,9 +1,8 @@
 import asyncio
 import socket
 
+from app.core.config import settings
 from app.schemas.ports import PortResult, PortsSchema
-
-_TIMEOUT = 3
 
 _PORTS: dict[int, str] = {
     21: 'FTP',
@@ -37,15 +36,21 @@ class PortScanner:
 
     @staticmethod
     async def _check_port(host: str, port: int) -> PortResult:
+        writer = None
         try:
             _, writer = await asyncio.wait_for(
                 asyncio.open_connection(host, port),
-                timeout=_TIMEOUT,
+                timeout=settings.PORT_TIMEOUT_SECONDS,
             )
-            writer.close()
-            await writer.wait_closed()
             return PortResult(port=port, open=True, status='open', service=_PORTS.get(port))
         except (asyncio.TimeoutError, TimeoutError):
             return PortResult(port=port, open=False, status='filtered', service=_PORTS.get(port))
         except (ConnectionRefusedError, OSError):
             return PortResult(port=port, open=False, status='closed', service=_PORTS.get(port))
+        finally:
+            if writer is not None:
+                writer.close()
+                try:
+                    await writer.wait_closed()
+                except Exception:
+                    pass

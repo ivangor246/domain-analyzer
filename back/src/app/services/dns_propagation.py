@@ -25,7 +25,7 @@ class DNSPropagation:
     async def _query_server(domain: str, name: str, server_ip: str) -> PropagationServerSchema:
         resolver = dns.asyncresolver.Resolver()
         resolver.nameservers = [server_ip]
-        resolver.lifetime = 5
+        resolver.lifetime = settings.DNS_TIMEOUT_SECONDS
 
         try:
             a_records, aaaa_records = await asyncio.gather(
@@ -48,6 +48,6 @@ class DNSPropagation:
     async def _resolve(resolver: dns.asyncresolver.Resolver, domain: str, rdtype: str) -> list[str]:
         try:
             answer = await resolver.resolve(domain, rdtype)
-            return [rdata.address for rdata in answer]
+            return [rdata.address for rdata in answer][: settings.MAX_DNS_RECORDS]
         except (dns.resolver.NoAnswer, dns.resolver.NXDOMAIN, dns.resolver.NoNameservers):
             return []

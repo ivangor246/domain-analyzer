@@ -1,10 +1,13 @@
+import json
 from datetime import datetime
 from urllib.parse import urlparse
 
 import httpx
 from pydantic import BaseModel
 
+from app.core.config import settings
 from app.core.exceptions import RDAPError
+from app.utils.http import is_retryable_http_error, parse_json, read_limited_response, run_with_retries
 
 from .network_guard import NetworkTargetGuard
 
@@ -23,7 +26,7 @@ class RDAPResponse(BaseModel):
 class RDAPClient:
     @staticmethod
     async def query(domain: str, servers: list[str]) -> RDAPResponse:
-        async with httpx.AsyncClient(timeout=10, follow_redirects=False) as client:
+        async with httpx.AsyncClient(timeout=settings.RDAP_TIMEOUT_SECONDS, follow_redirects=False) as client:
             for server in servers:
                 parsed_server = urlparse(server)
                 if (
@@ -40,10 +43,25 @@ class RDAPClient:
 
                 url = f'{server.rstrip("/")}/domain/{domain}'
                 try:
-                    response = await client.get(url)
-                    response.raise_for_status()
-                    return RDAPClient._parse(server=server, data=response.json())
+
+                    async def fetch() -> object:
+                        async with client.stream('GET', url) as response:
+                            response.raise_for_status()
+                            content = await read_limited_response(response, settings.HTTP_MAX_RESPONSE_BYTES)
+                        return parse_json(content)
+
+                    data = await run_with_retries(
+                        fetch,
+                        retries=settings.RDAP_MAX_RETRIES,
+                        should_retry=is_retryable_http_error,
+                        backoff_seconds=settings.RETRY_BACKOFF_SECONDS,
+                    )
+                    if not isinstance(data, dict):
+                        continue
+                    return RDAPClient._parse(server=server, data=data)
                 except httpx.HTTPError:
+                    continue
+                except (json.JSONDecodeError, ValueError):
                     continue
 
         raise RDAPError(f'All RDAP servers failed for domain: {domain}')
@@ -52,7 +70,9 @@ class RDAPClient:
     def _parse(server: str, data: dict) -> RDAPResponse:
         events = {e['eventAction']: e['eventDate'] for e in data.get('events', [])}
 
-        nameservers = [ns['ldhName'].lower() for ns in data.get('nameservers', []) if 'ldhName' in ns]
+        nameservers = [ns['ldhName'].lower() for ns in data.get('nameservers', []) if 'ldhName' in ns][
+            : settings.MAX_RDAP_NAMESERVERS
+        ]
 
         registrar = None
         for entity in data.get('entities', []):

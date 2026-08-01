@@ -3,8 +3,7 @@ import ipaddress
 import socket
 
 from app.core.exceptions import TargetNotAllowedError
-
-_RESOLUTION_TIMEOUT = 5
+from app.core.config import settings
 
 
 class NetworkTargetGuard:
@@ -22,7 +21,7 @@ class NetworkTargetGuard:
         try:
             addresses = await asyncio.wait_for(
                 loop.getaddrinfo(host, None, type=socket.SOCK_STREAM),
-                timeout=_RESOLUTION_TIMEOUT,
+                timeout=settings.NETWORK_TIMEOUT_SECONDS,
             )
         except asyncio.CancelledError:
             raise

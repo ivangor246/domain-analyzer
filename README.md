@@ -60,7 +60,11 @@ The current configuration supports:
 
 - `DOCS=True` — enables the OpenAPI, Swagger UI, and ReDoc endpoints;
 - `DEV_MODE=True` — enables development behavior when running through Compose;
-- `TITLE` — customizes the service title shown by FastAPI.
+- `TITLE` — customizes the service title shown by FastAPI;
+- provider URLs and `HTTP_USER_AGENT` — configure upstream endpoints and request identity;
+- provider timeouts, retry counts, response-size, redirect, domain, DNS, GeoIP, and RDAP limits.
+
+The complete list of supported settings and safe defaults is available in `back/.env.example`.
 
 Do not commit `back/.env` or place secrets in the repository.
 

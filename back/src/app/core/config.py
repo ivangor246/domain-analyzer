@@ -16,6 +16,27 @@ class Settings(BaseSettings):
     DOCS: bool = False
 
     BOOTSTRAP_URL: str = 'https://data.iana.org/rdap/dns.json'
+    BOOTSTRAP_TIMEOUT_SECONDS: float = Field(default=10, gt=0)
+    RDAP_TIMEOUT_SECONDS: float = Field(default=10, gt=0)
+    DNS_TIMEOUT_SECONDS: float = Field(default=5, gt=0)
+    NETWORK_TIMEOUT_SECONDS: float = Field(default=5, gt=0)
+    HTTP_TIMEOUT_SECONDS: float = Field(default=10, gt=0)
+    TLS_TIMEOUT_SECONDS: float = Field(default=10, gt=0)
+    PORT_TIMEOUT_SECONDS: float = Field(default=3, gt=0)
+    LATENCY_TIMEOUT_SECONDS: float = Field(default=5, gt=0)
+    LATENCY_PROBES: int = Field(default=3, gt=0)
+    HTTP_MAX_REDIRECTS: int = Field(default=5, ge=0)
+    HTTP_MAX_RESPONSE_BYTES: int = Field(default=65536, gt=0)
+    MAX_DOMAIN_LENGTH: int = Field(default=253, gt=0)
+    MAX_DNS_RECORDS: int = Field(default=100, gt=0)
+    MAX_GEOIP_IPS: int = Field(default=100, gt=0)
+    MAX_RDAP_NAMESERVERS: int = Field(default=100, gt=0)
+    RDAP_MAX_RETRIES: int = Field(default=1, ge=0)
+    GEOIP_MAX_RETRIES: int = Field(default=1, ge=0)
+    HTTP_MAX_RETRIES: int = Field(default=1, ge=0)
+    RETRY_BACKOFF_SECONDS: float = Field(default=0.1, ge=0)
+    GEOIP_URL: str = 'http://ip-api.com/batch'
+    HTTP_USER_AGENT: str = 'Mozilla/5.0 (compatible; DomainAnalyzer/1.0)'
     DNS_SERVERS: list[str] = Field(default_factory=lambda: ['8.8.8.8', '1.1.1.1'])
     PROPAGATION_SERVERS: list[dict[str, str]] = Field(
         default_factory=lambda: [

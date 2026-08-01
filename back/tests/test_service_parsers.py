@@ -186,6 +186,23 @@ class ServiceParserTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result.x_frame_options, 'DENY')
         self.assertEqual(len(requests), 2)
 
+    async def test_http_request_falls_back_to_get_after_head_rejection(self):
+        methods = []
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            methods.append(request.method)
+            if request.method == 'HEAD':
+                return httpx.Response(405, request=request)
+            return httpx.Response(200, content=b'ok', request=request)
+
+        client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
+        response = await http_headers._request(client, 'http://example.com')
+        await client.aclose()
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.content, b'ok')
+        self.assertEqual(methods, ['HEAD', 'GET'])
+
     def test_safe_redirect_url_resolves_relative_locations(self):
         self.assertEqual(
             http_headers._safe_redirect_url('https://example.com/path/start', '../final'),

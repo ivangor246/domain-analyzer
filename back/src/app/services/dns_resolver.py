@@ -27,7 +27,7 @@ class DNSResolver:
     @staticmethod
     async def resolve(domain: str) -> DNSRecords:
         resolver = dns.asyncresolver.Resolver()
-        resolver.lifetime = 5
+        resolver.lifetime = settings.DNS_TIMEOUT_SECONDS
         resolver.nameservers = settings.DNS_SERVERS
 
         tasks = {rtype: DNSResolver._query(resolver, domain, rtype) for rtype in DNSResolver.RECORD_TYPES}
@@ -38,7 +38,7 @@ class DNSResolver:
         a_records = DNSResolver._parse_a(raw['A'])
         aaaa_records = DNSResolver._parse_a(raw['AAAA'])
 
-        ptr_records = await DNSResolver._resolve_ptr(resolver, a_records + aaaa_records)
+        ptr_records = await DNSResolver._resolve_ptr(resolver, (a_records + aaaa_records)[: settings.MAX_DNS_RECORDS])
 
         return DNSRecords(
             A=a_records,
@@ -78,34 +78,37 @@ class DNSResolver:
     def _parse_a(answer: dns.resolver.Answer | None | BaseException) -> list[str]:
         if not isinstance(answer, dns.resolver.Answer):
             return []
-        return [rdata.address for rdata in answer]
+        return [rdata.address for rdata in answer][: settings.MAX_DNS_RECORDS]
 
     @staticmethod
     def _parse_mx(answer: dns.resolver.Answer | None | BaseException) -> list[dict[str, Any]]:
         if not isinstance(answer, dns.resolver.Answer):
             return []
-        return sorted(
+        records = sorted(
             [{'priority': rdata.preference, 'exchange': str(rdata.exchange).rstrip('.')} for rdata in answer],
             key=lambda r: r['priority'],
         )
+        return records[: settings.MAX_DNS_RECORDS]
 
     @staticmethod
     def _parse_txt(answer: dns.resolver.Answer | None | BaseException) -> list[str]:
         if not isinstance(answer, dns.resolver.Answer):
             return []
-        return [b''.join(rdata.strings).decode('utf-8', errors='replace') for rdata in answer]
+        return [b''.join(rdata.strings).decode('utf-8', errors='replace') for rdata in answer][
+            : settings.MAX_DNS_RECORDS
+        ]
 
     @staticmethod
     def _parse_cname(answer: dns.resolver.Answer | None | BaseException) -> list[str]:
         if not isinstance(answer, dns.resolver.Answer):
             return []
-        return [str(rdata.target).rstrip('.') for rdata in answer]
+        return [str(rdata.target).rstrip('.') for rdata in answer][: settings.MAX_DNS_RECORDS]
 
     @staticmethod
     def _parse_ns(answer: dns.resolver.Answer | None | BaseException) -> list[str]:
         if not isinstance(answer, dns.resolver.Answer):
             return []
-        return sorted(str(rdata.target).rstrip('.').lower() for rdata in answer)
+        return sorted(str(rdata.target).rstrip('.').lower() for rdata in answer)[: settings.MAX_DNS_RECORDS]
 
     @staticmethod
     def _parse_soa(answer: dns.resolver.Answer | None | BaseException) -> dict[str, Any] | None:
@@ -127,4 +130,6 @@ class DNSResolver:
     def _parse_caa(answer: dns.resolver.Answer | None | BaseException) -> list[dict[str, Any]]:
         if not isinstance(answer, dns.resolver.Answer):
             return []
-        return [{'flags': rdata.flags, 'tag': rdata.tag, 'value': rdata.value} for rdata in answer]
+        return [{'flags': rdata.flags, 'tag': rdata.tag, 'value': rdata.value} for rdata in answer][
+            : settings.MAX_DNS_RECORDS
+        ]
