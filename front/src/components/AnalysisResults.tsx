@@ -50,6 +50,7 @@ function localizedCheck(value: string, t: Translate) {
 }
 
 function ResultSection({ title, description, wide = false, children }: ResultSectionProps) {
+  const { t } = useI18n()
   const id = headingId(title)
 
   return (
@@ -58,7 +59,10 @@ function ResultSection({ title, description, wide = false, children }: ResultSec
         <h3 id={id}>{title}</h3>
         {description && <p>{description}</p>}
       </div>
-      {children}
+      <details className="result-details">
+        <summary>{t('showResults')}</summary>
+        {children}
+      </details>
     </section>
   )
 }
