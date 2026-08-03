@@ -2,6 +2,7 @@ services:
   redis:
     image: redis:7-alpine
     command: redis-server --appendonly yes
+    user: redis
     volumes:
       - redis_data:/data
     cap_drop:

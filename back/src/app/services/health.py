@@ -2,6 +2,8 @@ import asyncio
 
 from app.core.config import settings
 
+_WORKER_PING_TIMEOUT_MARGIN_SECONDS = 1.0
+
 
 async def check_redis() -> bool:
     client = None
@@ -29,7 +31,11 @@ async def check_redis() -> bool:
 def _ping_worker_sync() -> bool:
     from app.core.celery_app import celery_app
 
-    replies = celery_app.control.inspect(timeout=settings.REDIS_TIMEOUT_SECONDS).ping()
+    inspect_timeout = max(
+        0.1,
+        settings.REDIS_TIMEOUT_SECONDS - _WORKER_PING_TIMEOUT_MARGIN_SECONDS,
+    )
+    replies = celery_app.control.inspect(timeout=inspect_timeout).ping()
     return bool(replies)
 
 
