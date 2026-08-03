@@ -171,6 +171,7 @@ function App() {
     <main className="app-shell">
       <div className="page-width">
         <header className="app-toolbar">
+          <p className="toolbar-name">{t('domainAnalyzer')}</p>
           <LanguageSwitcher />
         </header>
 

@@ -40,9 +40,18 @@ select {
 .app-toolbar {
   display: flex;
   align-items: center;
-  justify-content: flex-end;
+  justify-content: space-between;
   gap: 1rem;
   margin: 0 auto 2.5rem;
+}
+
+.toolbar-name {
+  margin: 0;
+  color: #a8b8dc;
+  font-size: 0.82rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
 }
 
 .language-switcher {
@@ -231,7 +240,7 @@ summary:focus-visible {
 
 .progress-list {
   display: grid;
-  grid-template-columns: 1fr;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 0.6rem;
   margin: 1rem 0 0;
   padding: 0;
@@ -391,7 +400,7 @@ summary:focus-visible {
 
 .summary-grid {
   display: grid;
-  grid-template-columns: 1fr;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 0.75rem;
   margin: 1.5rem 0;
 }
@@ -406,7 +415,7 @@ summary:focus-visible {
 
 .metadata-summary {
   display: grid;
-  grid-template-columns: 1fr;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 0.75rem;
   margin-top: 1rem;
 }
@@ -595,7 +604,7 @@ summary:focus-visible {
   font-size: 0.88rem;
 }
 
-.result-grid {
+.detail-grid.result-grid {
   grid-template-columns: 1fr;
   gap: 1rem;
 }
@@ -675,7 +684,7 @@ summary:focus-visible {
 
 .record-groups {
   display: grid;
-  grid-template-columns: 1fr;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 1rem;
 }
 
@@ -891,6 +900,12 @@ summary {
 }
 
 @media (max-width: 800px) {
+  .summary-grid,
+  .metadata-summary,
+  .record-groups {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
   .result-grid,
   .probe-grid,
   .network-grid {
