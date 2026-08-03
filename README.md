@@ -94,6 +94,26 @@ make clear    # Remove services, volumes, images, and orphans
 
 The API is available at `http://localhost:8000`.
 
+## Run the full project locally
+
+The backend and frontend run as independent development processes. Prepare their local environment files once:
+
+```bash
+cp back/.env.example back/.env
+cp front/.env.example front/.env
+```
+
+Install both sets of dependencies and start the full development environment from the repository root:
+
+```bash
+make install
+make dev-all
+```
+
+The combined command starts the backend, worker, Redis, and Vite frontend. Open the frontend at `http://localhost:5173`; the backend API is available at `http://localhost:8000`, with Swagger UI at `http://localhost:8000/api/docs`.
+
+Press `Ctrl+C` in the `make dev-all` terminal to stop both development processes. Use `make stop` if backend containers remain running.
+
 Application logs are emitted as one JSON object per line. Each response includes an `X-Request-ID` header. For asynchronous jobs, the request ID is carried into the Celery task and logged together with the analysis ID, task ID, check name, status, and duration, so one analysis can be followed across API, worker, and provider-check logs.
 
 The analysis endpoints return HTTP 429 after the configured number of requests from one client address within the rate-limit window. Redis is used by default so the limit is shared across backend processes. Set `RATE_LIMIT_REDIS_FALLBACK_ENABLED=True` to keep a per-process fallback when Redis is temporarily unavailable; disable the fallback when rejecting requests is preferable to weakening the limit.

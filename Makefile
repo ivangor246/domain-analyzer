@@ -1,12 +1,19 @@
 BACKEND_COMPOSE := back/docker-compose.yml
 FRONTEND_DIR := front
 
+install:
+	cd back && poetry install
+	$(MAKE) front-install
+
 # develop
 up:
 	docker compose -f $(BACKEND_COMPOSE) up -d --build --force-recreate $(for)
 
 dev:
 	DEV_MODE=True docker compose -f $(BACKEND_COMPOSE) watch
+
+dev-all:
+	sh scripts/dev-all.sh
 
 stop:
 	docker compose -f $(BACKEND_COMPOSE) stop $(for)
