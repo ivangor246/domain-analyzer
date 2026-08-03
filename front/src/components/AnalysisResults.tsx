@@ -8,6 +8,7 @@ import type {
   Propagation,
   SSLData,
 } from '../api/types'
+import { useI18n, type Translate } from '../i18n'
 import {
   downloadFile,
   filenameForDomain,
@@ -28,8 +29,24 @@ interface ResultSectionProps {
 }
 
 function headingId(title: string) {
-  const slug = title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')
+  const slug = title
+    .toLocaleLowerCase()
+    .normalize('NFKD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^\p{L}\p{N}]+/gu, '-')
+    .replace(/^-|-$/g, '')
   return `${slug || 'result'}-heading`
+}
+
+function localizedValue(value: string, t: Translate) {
+  const translationKey = `status.${value}`
+  const translation = t(translationKey)
+  return translation === translationKey ? value : translation
+}
+
+function localizedCheck(value: string, t: Translate) {
+  const translation = t(value)
+  return translation === value ? value.replaceAll('_', ' ') : translation
 }
 
 function ResultSection({ title, description, wide = false, children }: ResultSectionProps) {
@@ -46,13 +63,17 @@ function ResultSection({ title, description, wide = false, children }: ResultSec
   )
 }
 
-function EmptyState({ children = 'No data available.' }: { children?: ReactNode }) {
-  return <p className="empty-state">{children}</p>
+function EmptyState({ children }: { children?: ReactNode }) {
+  const { t } = useI18n()
+
+  return <p className="empty-state">{children ?? t('emptyData')}</p>
 }
 
-function StringList({ values, empty = 'No records returned.' }: { values: string[]; empty?: string }) {
+function StringList({ values, empty }: { values: string[]; empty?: string }) {
+  const { t } = useI18n()
+
   if (values.length === 0) {
-    return <EmptyState>{empty}</EmptyState>
+    return <EmptyState>{empty ?? t('noRecords')}</EmptyState>
   }
 
   return (
@@ -75,20 +96,20 @@ function Field({ label, value }: { label: string; value: ReactNode }) {
   )
 }
 
-function formatDate(value: string | null) {
+function formatDate(value: string | null, locale: string) {
   if (!value) {
     return '—'
   }
 
   const date = new Date(value)
-  return Number.isNaN(date.getTime()) ? value : date.toLocaleDateString()
+  return Number.isNaN(date.getTime()) ? value : date.toLocaleDateString(locale)
 }
 
-function formatDateTime(value: string) {
+function formatDateTime(value: string, locale: string) {
   const date = new Date(value)
   return Number.isNaN(date.getTime())
     ? value
-    : date.toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })
+    : date.toLocaleString(locale, { dateStyle: 'medium', timeStyle: 'short' })
 }
 
 function SummaryCard({ label, value }: { label: string; value: ReactNode }) {
@@ -103,11 +124,12 @@ function SummaryCard({ label, value }: { label: string; value: ReactNode }) {
 }
 
 function DNSRecords({ analysis }: { analysis: DomainAnalysis }) {
+  const { t } = useI18n()
   const { dns } = analysis
   const propagation = dns.propagation
 
   return (
-    <ResultSection title="DNS records" description="Authoritative records and public resolver propagation.">
+    <ResultSection title={t('dnsRecords')} description={t('dnsDescription')}>
       <div className="record-groups">
         <div className="record-group">
           <h4>A</h4>
@@ -147,9 +169,9 @@ function DNSRecords({ analysis }: { analysis: DomainAnalysis }) {
           <h4>SOA</h4>
           {dns.SOA ? (
             <dl className="compact-fields">
-              <Field label="Primary" value={dns.SOA.mname} />
-              <Field label="Responsible" value={dns.SOA.rname} />
-              <Field label="Serial" value={dns.SOA.serial} />
+              <Field label={t('primary')} value={dns.SOA.mname} />
+              <Field label={t('responsible')} value={dns.SOA.rname} />
+              <Field label={t('serial')} value={dns.SOA.serial} />
             </dl>
           ) : (
             <EmptyState />
@@ -171,7 +193,7 @@ function DNSRecords({ analysis }: { analysis: DomainAnalysis }) {
         </div>
       </div>
       <div className="propagation-block">
-        <h4>Propagation</h4>
+        <h4>{t('propagation')}</h4>
         <PropagationTable propagation={propagation} />
       </div>
     </ResultSection>
@@ -179,6 +201,8 @@ function DNSRecords({ analysis }: { analysis: DomainAnalysis }) {
 }
 
 function PropagationTable({ propagation }: { propagation: Propagation | null }) {
+  const { t } = useI18n()
+
   if (!propagation) {
     return <EmptyState />
   }
@@ -186,16 +210,16 @@ function PropagationTable({ propagation }: { propagation: Propagation | null }) 
   return (
     <div>
       <p className={`inline-status ${propagation.consistent ? 'status-good' : 'status-warning'}`}>
-        {propagation.consistent ? 'Records are consistent' : 'Resolvers returned different records'}
+        {propagation.consistent ? t('recordsConsistent') : t('recordsInconsistent')}
       </p>
       <div className="table-wrap">
         <table>
           <thead>
             <tr>
-              <th scope="col">Resolver</th>
+              <th scope="col">{t('resolver')}</th>
               <th scope="col">A</th>
               <th scope="col">AAAA</th>
-              <th scope="col">Status</th>
+              <th scope="col">{t('status')}</th>
             </tr>
           </thead>
           <tbody>
@@ -208,7 +232,7 @@ function PropagationTable({ propagation }: { propagation: Propagation | null }) 
                 <td>{server.A.join(', ') || '—'}</td>
                 <td>{server.AAAA.join(', ') || '—'}</td>
                 <td>
-                  <span className={`status-pill status-${server.status}`}>{server.status}</span>
+                  <span className={`status-pill status-${server.status}`}>{localizedValue(server.status, t)}</span>
                 </td>
               </tr>
             ))}
@@ -220,10 +244,11 @@ function PropagationTable({ propagation }: { propagation: Propagation | null }) 
 }
 
 function GeoIPResults({ analysis }: { analysis: DomainAnalysis }) {
+  const { t } = useI18n()
   const records = Object.values(analysis.geoip)
 
   return (
-    <ResultSection title="GeoIP & ASN" description="Location and network ownership for resolved addresses.">
+    <ResultSection title={t('geoipAsn')} description={t('geoipDescription')}>
       {records.length === 0 ? (
         <EmptyState />
       ) : (
@@ -231,10 +256,10 @@ function GeoIPResults({ analysis }: { analysis: DomainAnalysis }) {
           <table>
             <thead>
               <tr>
-                <th scope="col">IP address</th>
-                <th scope="col">Location</th>
-                <th scope="col">Organization</th>
-                <th scope="col">ASN</th>
+                <th scope="col">{t('ipAddress')}</th>
+                <th scope="col">{t('location')}</th>
+                <th scope="col">{t('organization')}</th>
+                <th scope="col">{t('asn')}</th>
               </tr>
             </thead>
             <tbody>
@@ -255,6 +280,8 @@ function GeoIPResults({ analysis }: { analysis: DomainAnalysis }) {
 }
 
 function HTTPProbe({ label, probe }: { label: string; probe: HTTPProbeResult | null }) {
+  const { t } = useI18n()
+
   if (!probe) {
     return (
       <div className="probe-card">
@@ -269,22 +296,22 @@ function HTTPProbe({ label, probe }: { label: string; probe: HTTPProbeResult | n
       <div className="probe-title-row">
         <h4>{label}</h4>
         <span className={`status-pill ${probe.reachable ? 'status-ok' : 'status-error'}`}>
-          {probe.reachable ? 'Reachable' : 'Unavailable'}
+          {probe.reachable ? t('reachable') : t('unavailable')}
         </span>
       </div>
       <dl className="compact-fields">
-        <Field label="Status" value={probe.status_code} />
+        <Field label={t('status')} value={probe.status_code} />
         <Field
-          label="Response"
+          label={t('response')}
           value={probe.response_time_ms === null ? '—' : `${probe.response_time_ms} ms`}
         />
-        <Field label="Server" value={probe.server} />
-        <Field label="Content type" value={probe.content_type} />
-        <Field label="Final URL" value={probe.final_url} />
+        <Field label={t('server')} value={probe.server} />
+        <Field label={t('contentType')} value={probe.content_type} />
+        <Field label={t('finalUrl')} value={probe.final_url} />
       </dl>
       {probe.redirect_chain.length > 0 && (
         <details>
-          <summary>{probe.redirect_chain.length} redirect(s)</summary>
+          <summary>{t('redirects', { count: probe.redirect_chain.length })}</summary>
           <StringList values={probe.redirect_chain} />
         </details>
       )}
@@ -293,8 +320,10 @@ function HTTPProbe({ label, probe }: { label: string; probe: HTTPProbeResult | n
 }
 
 function HTTPResults({ analysis }: { analysis: DomainAnalysis }) {
+  const { t } = useI18n()
+
   return (
-    <ResultSection title="HTTP & HTTPS" description="Reachability, response timing, redirects, and selected headers.">
+    <ResultSection title={t('httpHttps')} description={t('httpDescription')}>
       {!analysis.http ? (
         <EmptyState />
       ) : (
@@ -308,29 +337,31 @@ function HTTPResults({ analysis }: { analysis: DomainAnalysis }) {
 }
 
 function TLSResults({ ssl }: { ssl: SSLData | null }) {
+  const { locale, t } = useI18n()
+
   return (
-    <ResultSection title="TLS certificate" description="Certificate validity and negotiated connection details.">
+    <ResultSection title={t('tlsCertificate')} description={t('tlsDescription')}>
       {!ssl ? (
         <EmptyState />
       ) : (
         <div className="tls-content">
           <div className={`tls-status ${ssl.valid ? 'status-good' : 'status-warning'}`}>
-            <strong>{ssl.valid ? 'Certificate is valid' : 'Certificate validation failed'}</strong>
+            <strong>{ssl.valid ? t('certificateValid') : t('certificateFailed')}</strong>
             {ssl.error && <span>{ssl.error}</span>}
           </div>
           <dl className="detail-grid">
-            <Field label="Protocol" value={ssl.protocol} />
-            <Field label="Cipher" value={ssl.cipher} />
-            <Field label="Subject" value={ssl.certificate?.subject} />
-            <Field label="Issuer" value={ssl.certificate?.issuer} />
-            <Field label="Valid from" value={formatDate(ssl.certificate?.valid_from || null)} />
-            <Field label="Valid until" value={formatDate(ssl.certificate?.valid_until || null)} />
-            <Field label="Days remaining" value={ssl.certificate?.days_remaining} />
-            <Field label="Signature" value={ssl.certificate?.signature_algorithm} />
+            <Field label={t('protocol')} value={ssl.protocol} />
+            <Field label={t('cipher')} value={ssl.cipher} />
+            <Field label={t('subject')} value={ssl.certificate?.subject} />
+            <Field label={t('issuer')} value={ssl.certificate?.issuer} />
+            <Field label={t('validFrom')} value={formatDate(ssl.certificate?.valid_from || null, locale)} />
+            <Field label={t('validUntil')} value={formatDate(ssl.certificate?.valid_until || null, locale)} />
+            <Field label={t('daysRemaining')} value={ssl.certificate?.days_remaining} />
+            <Field label={t('signature')} value={ssl.certificate?.signature_algorithm} />
           </dl>
           {ssl.certificate?.san && ssl.certificate.san.length > 0 && (
             <div className="subsection">
-              <h4>Subject alternative names</h4>
+              <h4>{t('subjectAlternativeNames')}</h4>
               <StringList values={ssl.certificate.san} />
             </div>
           )}
@@ -341,11 +372,13 @@ function TLSResults({ ssl }: { ssl: SSLData | null }) {
 }
 
 function NetworkResults({ analysis }: { analysis: DomainAnalysis }) {
+  const { t } = useI18n()
+
   return (
-    <ResultSection title="Ports & latency" description="Common TCP service ports and connection timing.">
+    <ResultSection title={t('portsLatency')} description={t('portsDescription')}>
       <div className="network-grid">
         <div>
-          <h4>Port scan</h4>
+          <h4>{t('portScan')}</h4>
           {!analysis.ports || analysis.ports.results.length === 0 ? (
             <EmptyState />
           ) : (
@@ -353,9 +386,9 @@ function NetworkResults({ analysis }: { analysis: DomainAnalysis }) {
               <table>
                 <thead>
                   <tr>
-                    <th scope="col">Port</th>
-                    <th scope="col">Service</th>
-                    <th scope="col">Status</th>
+                    <th scope="col">{t('port')}</th>
+                    <th scope="col">{t('service')}</th>
+                    <th scope="col">{t('status')}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -364,7 +397,7 @@ function NetworkResults({ analysis }: { analysis: DomainAnalysis }) {
                       <th scope="row">{result.port}</th>
                       <td>{result.service || '—'}</td>
                       <td>
-                        <span className={`status-pill status-${result.status}`}>{result.status}</span>
+                        <span className={`status-pill status-${result.status}`}>{localizedValue(result.status, t)}</span>
                       </td>
                     </tr>
                   ))}
@@ -374,7 +407,7 @@ function NetworkResults({ analysis }: { analysis: DomainAnalysis }) {
           )}
         </div>
         <div>
-          <h4>TCP latency</h4>
+          <h4>{t('latency')}</h4>
           {!analysis.latency ? (
             <EmptyState />
           ) : (
@@ -390,6 +423,8 @@ function NetworkResults({ analysis }: { analysis: DomainAnalysis }) {
 }
 
 function LatencyCard({ label, result }: { label: string; result: LatencyResult | null }) {
+  const { t } = useI18n()
+
   return (
     <div className="latency-card">
       <strong>{label}</strong>
@@ -397,10 +432,10 @@ function LatencyCard({ label, result }: { label: string; result: LatencyResult |
         <EmptyState />
       ) : (
         <dl className="compact-fields">
-          <Field label="Min" value={`${result.min_ms} ms`} />
-          <Field label="Average" value={`${result.avg_ms} ms`} />
-          <Field label="Max" value={`${result.max_ms} ms`} />
-          <Field label="Loss" value={result.loss} />
+          <Field label={t('min')} value={`${result.min_ms} ms`} />
+          <Field label={t('average')} value={`${result.avg_ms} ms`} />
+          <Field label={t('max')} value={`${result.max_ms} ms`} />
+          <Field label={t('loss')} value={result.loss} />
         </dl>
       )}
     </div>
@@ -408,6 +443,8 @@ function LatencyCard({ label, result }: { label: string; result: LatencyResult |
 }
 
 function AnalysisMetadataPanel({ metadata }: { metadata?: AnalysisMetadata | null }) {
+  const { locale, t } = useI18n()
+
   if (!metadata) {
     return null
   }
@@ -415,36 +452,38 @@ function AnalysisMetadataPanel({ metadata }: { metadata?: AnalysisMetadata | nul
   return (
     <section className="metadata-panel" aria-labelledby="metadata-heading">
       <div className="section-heading">
-        <h3 id="metadata-heading">Freshness and sources</h3>
-        <p>When each check completed, how long it took, and which public source was used.</p>
+        <h3 id="metadata-heading">{t('freshnessSources')}</h3>
+        <p>{t('freshnessDescription')}</p>
       </div>
       <div className="metadata-summary">
-        <SummaryCard label="Completed" value={formatDateTime(metadata.completed_at)} />
-        <SummaryCard label="Analysis duration" value={`${metadata.duration_ms} ms`} />
-        <SummaryCard label="Checks reported" value={Object.keys(metadata.checks).length} />
+        <SummaryCard label={t('completed')} value={formatDateTime(metadata.completed_at, locale)} />
+        <SummaryCard label={t('analysisDuration')} value={`${metadata.duration_ms} ms`} />
+        <SummaryCard label={t('checksReported')} value={Object.keys(metadata.checks).length} />
       </div>
       {Object.keys(metadata.checks).length > 0 && (
         <details className="metadata-details" open>
-          <summary>Check sources</summary>
+          <summary>{t('checkSources')}</summary>
           <div className="table-wrap">
             <table>
               <thead>
                 <tr>
-                  <th scope="col">Check</th>
-                  <th scope="col">Status</th>
-                  <th scope="col">Completed</th>
-                  <th scope="col">Duration</th>
-                  <th scope="col">Source</th>
+                  <th scope="col">{t('check')}</th>
+                  <th scope="col">{t('status')}</th>
+                  <th scope="col">{t('completed')}</th>
+                  <th scope="col">{t('duration')}</th>
+                  <th scope="col">{t('source')}</th>
                 </tr>
               </thead>
               <tbody>
                 {Object.entries(metadata.checks).map(([check, details]) => (
                   <tr key={check}>
-                    <th scope="row">{check.replaceAll('_', ' ')}</th>
+                    <th scope="row">{localizedCheck(check, t)}</th>
                     <td>
-                      <span className={`status-pill status-${details.status}`}>{details.status}</span>
+                      <span className={`status-pill status-${details.status}`}>
+                        {localizedValue(details.status, t)}
+                      </span>
                     </td>
-                    <td>{formatDateTime(details.completed_at)}</td>
+                    <td>{formatDateTime(details.completed_at, locale)}</td>
                     <td>{details.duration_ms} ms</td>
                     <td>{details.sources.join(', ') || '—'}</td>
                   </tr>
@@ -459,6 +498,8 @@ function AnalysisMetadataPanel({ metadata }: { metadata?: AnalysisMetadata | nul
 }
 
 function AnalysisResults({ analysis }: AnalysisResultsProps) {
+  const { locale, t } = useI18n()
+
   const exportJson = () => {
     downloadFile(formatAnalysisJson(analysis), filenameForDomain(analysis.domain, 'json'), 'application/json')
   }
@@ -471,36 +512,36 @@ function AnalysisResults({ analysis }: AnalysisResultsProps) {
     <section className="analysis-results" aria-labelledby="results-heading">
       <div className="results-heading">
         <div>
-          <p className="eyebrow">Analysis report</p>
+          <p className="eyebrow">{t('analysisReport')}</p>
           <h2 id="results-heading">{analysis.domain}</h2>
         </div>
         <div className="results-actions">
-          <span className="result-state">Complete with {analysis.analysis_errors.length} warning(s)</span>
-          <div className="export-actions" aria-label="Export report">
+          <span className="result-state">{t('completeWithWarnings', { count: analysis.analysis_errors.length })}</span>
+          <div className="export-actions" aria-label={t('exportReport')}>
             <button type="button" className="button button-secondary" onClick={exportJson}>
-              JSON
+              {t('json')}
             </button>
             <button type="button" className="button button-secondary" onClick={exportMarkdown}>
-              Markdown
+              {t('markdown')}
             </button>
           </div>
         </div>
       </div>
 
       <div className="summary-grid">
-        <SummaryCard label="Registrar" value={analysis.registrar} />
-        <SummaryCard label="Status" value={analysis.status.join(', ')} />
-        <SummaryCard label="RDAP server" value={analysis.rdap_server} />
-        <SummaryCard label="Nameservers" value={analysis.nameservers.length} />
+        <SummaryCard label={t('registrar')} value={analysis.registrar} />
+        <SummaryCard label={t('status')} value={analysis.status.map((status) => localizedValue(status, t)).join(', ')} />
+        <SummaryCard label={t('rdapServer')} value={analysis.rdap_server} />
+        <SummaryCard label={t('nameservers')} value={analysis.nameservers.length} />
       </div>
 
       {analysis.analysis_errors.length > 0 && (
-        <aside className="warning-panel" aria-label="Analysis warnings">
-          <strong>Some checks were unavailable</strong>
+        <aside className="warning-panel" aria-label={t('analysisWarnings')}>
+          <strong>{t('someChecksUnavailable')}</strong>
           <ul>
             {analysis.analysis_errors.map((error) => (
               <li key={error.check}>
-                <span>{error.check}</span> {error.message}
+                <span>{localizedCheck(error.check, t)}</span> {error.message}
               </li>
             ))}
           </ul>
@@ -512,16 +553,16 @@ function AnalysisResults({ analysis }: AnalysisResultsProps) {
       <SecuritySummary analysis={analysis} />
 
       <div className="detail-grid result-grid">
-        <ResultSection title="Registration" description="RDAP registration metadata.">
+        <ResultSection title={t('registration')} description={t('registrationDescription')}>
           <dl className="compact-fields">
-            <Field label="Registrar" value={analysis.registrar} />
-            <Field label="Registered" value={formatDate(analysis.registration_date)} />
-            <Field label="Expires" value={formatDate(analysis.expiration_date)} />
-            <Field label="Updated" value={formatDate(analysis.updated_date)} />
+            <Field label={t('registrar')} value={analysis.registrar} />
+            <Field label={t('registered')} value={formatDate(analysis.registration_date, locale)} />
+            <Field label={t('expires')} value={formatDate(analysis.expiration_date, locale)} />
+            <Field label={t('updated')} value={formatDate(analysis.updated_date, locale)} />
             <Field label="WHOIS" value={analysis.whois_server} />
           </dl>
           <div className="subsection">
-            <h4>Nameservers</h4>
+            <h4>{t('nameservers')}</h4>
             <StringList values={analysis.nameservers} />
           </div>
         </ResultSection>

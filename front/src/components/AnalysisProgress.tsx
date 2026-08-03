@@ -1,30 +1,32 @@
 import type { AnalysisCheckStatus, AnalysisProgress as AnalysisProgressItem } from '../api/types'
+import { useI18n, type Translate } from '../i18n'
 
 interface AnalysisProgressProps {
   progress: AnalysisProgressItem[]
 }
 
-const checkLabels: Record<string, string> = {
-  rdap: 'RDAP registration',
-  dns: 'DNS records',
-  dns_propagation: 'DNS propagation',
-  geoip: 'GeoIP and ASN',
-  http: 'HTTP and HTTPS',
-  ssl: 'TLS certificate',
-  ports: 'Port scan',
-  latency: 'TCP latency',
+const checkKeys: Record<string, string> = {
+  rdap: 'rdap',
+  dns: 'dns',
+  dns_propagation: 'dns_propagation',
+  geoip: 'geoip',
+  http: 'http',
+  ssl: 'ssl',
+  ports: 'ports',
+  latency: 'latency',
 }
 
-const statusLabels: Record<AnalysisCheckStatus, string> = {
-  queued: 'Queued',
-  running: 'Running',
-  successful: 'Successful',
-  partial: 'Partial',
-  failed: 'Failed',
+const statusKeys: Record<AnalysisCheckStatus, string> = {
+  queued: 'queued',
+  running: 'running',
+  successful: 'successful',
+  partial: 'partial',
+  failed: 'failed',
 }
 
-function checkLabel(check: string) {
-  return checkLabels[check] ?? check.replaceAll('_', ' ')
+function checkLabel(check: string, t: Translate) {
+  const key = checkKeys[check]
+  return key ? t(key) : check.replaceAll('_', ' ')
 }
 
 function formatDuration(durationMs: number | null) {
@@ -42,18 +44,23 @@ function completedStatus(status: AnalysisCheckStatus) {
 }
 
 function AnalysisProgress({ progress }: AnalysisProgressProps) {
+  const { t } = useI18n()
   const completedCount = progress.filter((item) => completedStatus(item.status)).length
   const runningCount = progress.filter((item) => item.status === 'running').length
   const summary = progress.length === 0
-    ? 'Preparing checks…'
-    : `${completedCount} of ${progress.length} checks complete${runningCount > 0 ? `, ${runningCount} running` : ''}.`
+    ? t('preparingChecks')
+    : t('progressSummary', {
+        completed: completedCount,
+        total: progress.length,
+        running: runningCount > 0 ? t('progressRunning', { count: runningCount }) : '',
+      })
 
   return (
     <section className="progress-panel" aria-labelledby="progress-heading">
       <div className="progress-heading">
         <div>
-          <p className="eyebrow">Live status</p>
-          <h2 id="progress-heading">Analysis progress</h2>
+          <p className="eyebrow">{t('liveStatus')}</p>
+          <h2 id="progress-heading">{t('analysisProgress')}</h2>
         </div>
         <p className="progress-summary" role="status" aria-live="polite">
           {summary}
@@ -61,14 +68,14 @@ function AnalysisProgress({ progress }: AnalysisProgressProps) {
       </div>
 
       {progress.length === 0 ? (
-        <p className="progress-empty">The worker is preparing the analysis queue.</p>
+        <p className="progress-empty">{t('workerPreparingQueue')}</p>
       ) : (
         <ul className="progress-list">
           {progress.map((item, index) => (
             <li className="progress-item" key={`${item.check}-${index}`}>
-              <span className="progress-check">{checkLabel(item.check)}</span>
+              <span className="progress-check">{checkLabel(item.check, t)}</span>
               <span className={`progress-status progress-status-${item.status}`}>
-                {statusLabels[item.status]}
+                {t(statusKeys[item.status])}
               </span>
               <span className="progress-duration">{formatDuration(item.duration_ms)}</span>
             </li>

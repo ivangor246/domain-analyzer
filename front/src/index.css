@@ -17,7 +17,8 @@ body {
 }
 
 button,
-input {
+input,
+select {
   font: inherit;
 }
 
@@ -32,7 +33,52 @@ input {
 
 .page-width {
   width: min(100%, 76rem);
+  min-width: 0;
   margin: 0 auto;
+}
+
+.app-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin: 0 auto 2.5rem;
+}
+
+.toolbar-name {
+  margin: 0;
+  color: #a8b8dc;
+  font-size: 0.82rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.language-switcher {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+}
+
+.language-switcher label {
+  color: #8997b6;
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.language-switcher select {
+  min-width: 7.5rem;
+  border: 1px solid #36476e;
+  border-radius: 0.7rem;
+  padding: 0.55rem 0.7rem;
+  color: #e8edf7;
+  background: #0d152a;
+  outline: none;
+}
+
+.language-switcher select:focus-visible {
+  outline: 3px solid rgba(131, 215, 198, 0.72);
+  outline-offset: 3px;
 }
 
 .hero {
@@ -97,12 +143,13 @@ h1 {
 
 .form-row {
   display: flex;
+  flex-wrap: wrap;
   gap: 0.75rem;
 }
 
 .form-row input {
   min-width: 0;
-  flex: 1;
+  flex: 1 1 16rem;
   border: 1px solid #36476e;
   border-radius: 0.85rem;
   padding: 0.85rem 1rem;
@@ -189,6 +236,7 @@ summary:focus-visible {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
+  flex-wrap: wrap;
   gap: 1rem;
 }
 
@@ -203,10 +251,12 @@ summary:focus-visible {
 }
 
 .progress-summary {
+  max-width: 100%;
   margin: 0;
   color: #83d7c6;
   font-size: 0.82rem;
   font-weight: 700;
+  overflow-wrap: anywhere;
   text-align: right;
 }
 
@@ -232,11 +282,10 @@ summary:focus-visible {
 }
 
 .progress-check {
-  overflow: hidden;
+  min-width: 0;
   color: #e8edf7;
   font-size: 0.84rem;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  overflow-wrap: anywhere;
 }
 
 .progress-status {
@@ -291,6 +340,7 @@ summary:focus-visible {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  flex-wrap: wrap;
   gap: 1rem;
   border-color: rgba(255, 167, 112, 0.36);
   background: rgba(64, 40, 42, 0.72);
@@ -305,6 +355,11 @@ summary:focus-visible {
 .error-panel strong,
 .warning-panel strong {
   color: #ffc28c;
+}
+
+.error-panel > div {
+  min-width: 0;
+  flex: 1 1 20rem;
 }
 
 .error-panel p {
@@ -322,10 +377,18 @@ summary:focus-visible {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
+  flex-wrap: wrap;
   gap: 1rem;
 }
 
+.results-heading > *,
+.probe-title-row > *,
+.security-summary-heading > * {
+  min-width: 0;
+}
+
 .results-actions {
+  min-width: 0;
   display: grid;
   justify-items: end;
   gap: 0.75rem;
@@ -350,6 +413,7 @@ summary:focus-visible {
 }
 
 .result-state {
+  max-width: 100%;
   color: #83d7c6;
   font-size: 0.82rem;
   font-weight: 700;
@@ -411,11 +475,9 @@ summary:focus-visible {
 
 .summary-card strong {
   display: block;
-  overflow: hidden;
+  overflow-wrap: anywhere;
   color: #f2f5fc;
   font-size: 1rem;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 .warning-panel {
@@ -424,7 +486,9 @@ summary:focus-visible {
 }
 
 .warning-panel ul {
-  margin: 0.6rem 0 0;
+  min-width: 0;
+  flex: 1 1 20rem;
+  margin: 0;
   padding-left: 1.15rem;
   color: #e5b9a4;
   font-size: 0.88rem;
@@ -448,6 +512,7 @@ summary:focus-visible {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
+  flex-wrap: wrap;
   gap: 1rem;
 }
 
@@ -531,6 +596,7 @@ summary:focus-visible {
   font-size: 0.68rem;
   font-weight: 800;
   letter-spacing: 0.04em;
+  white-space: nowrap;
   text-transform: uppercase;
 }
 
@@ -593,6 +659,7 @@ summary:focus-visible {
 
 .section-heading h3 {
   font-size: 1.1rem;
+  overflow-wrap: anywhere;
 }
 
 .section-heading p {
@@ -713,11 +780,14 @@ summary:focus-visible {
 }
 
 .table-wrap {
+  max-width: 100%;
   overflow-x: auto;
+  overscroll-behavior-inline: contain;
 }
 
 table {
   width: 100%;
+  min-width: 34rem;
   border-collapse: collapse;
   color: #dce4f5;
   font-size: 0.84rem;
@@ -870,11 +940,33 @@ summary {
     padding: 3.5rem 1rem;
   }
 
+  .app-toolbar {
+    align-items: flex-start;
+    flex-wrap: wrap;
+    margin-bottom: 2rem;
+  }
+
+  .language-switcher {
+    flex: 1 1 100%;
+    justify-content: space-between;
+  }
+
+  .language-switcher select {
+    flex: 0 1 10rem;
+  }
+
   .form-row,
   .error-panel,
+  .warning-panel,
   .results-heading {
     align-items: stretch;
     flex-direction: column;
+  }
+
+  .warning-panel ul {
+    flex-basis: auto;
+    width: 100%;
+    margin-top: 0.6rem;
   }
 
   .results-actions,
@@ -905,6 +997,32 @@ summary {
 
   .progress-list {
     grid-template-columns: 1fr;
+  }
+
+  .progress-item {
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: start;
+  }
+
+  .progress-check {
+    grid-column: 1;
+    grid-row: 1;
+  }
+
+  .progress-status {
+    grid-column: 2;
+    grid-row: 1;
+  }
+
+  .progress-duration {
+    grid-column: 1 / -1;
+    grid-row: 2;
+    min-width: 0;
+    text-align: left;
+  }
+
+  .export-actions .button {
+    flex: 1 1 8rem;
   }
 
   .result-state {

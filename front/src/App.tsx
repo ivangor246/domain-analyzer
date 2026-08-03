@@ -5,6 +5,8 @@ import type { AnalysisJob, AnalysisJobStatus, AnalysisProgress as AnalysisProgre
 import AnalysisForm from './components/AnalysisForm'
 import AnalysisProgress from './components/AnalysisProgress'
 import AnalysisResults from './components/AnalysisResults'
+import LanguageSwitcher from './components/LanguageSwitcher'
+import { useI18n, type Translate } from './i18n'
 
 type ViewState =
   | { status: 'idle' }
@@ -21,23 +23,23 @@ function isAbortError(error: unknown) {
   return (error instanceof DOMException || error instanceof Error) && error.name === 'AbortError'
 }
 
-function errorMessage(error: Error) {
+function errorMessage(error: Error, t: Translate) {
   if (error instanceof ApiError && error.status === 429) {
-    return `${error.message} The rate limit will reset shortly.`
+    return t('rateLimitMessage', { message: error.message })
   }
   if (error instanceof ApiError && error.status === 503) {
-    return `${error.message} Check that Redis and the analysis worker are running.`
+    return t('serviceUnavailableMessage', { message: error.message })
   }
 
   return error.message
 }
 
-function statusMessage(view: ViewState) {
+function statusMessage(view: ViewState, t: Translate) {
   if (view.status !== 'loading') {
-    return 'Results stay in your browser until you analyze another domain.'
+    return t('resultsStay')
   }
 
-  return view.phase === 'queued' ? 'Waiting for an analysis worker…' : 'Collecting public domain signals…'
+  return view.phase === 'queued' ? t('waitingWorker') : t('collectingSignals')
 }
 
 function isActiveJob(job: AnalysisJob): job is AnalysisJob & { status: 'queued' | 'running' } {
@@ -45,6 +47,7 @@ function isActiveJob(job: AnalysisJob): job is AnalysisJob & { status: 'queued' 
 }
 
 function App() {
+  const { t } = useI18n()
   const [domain, setDomain] = useState('')
   const [view, setView] = useState<ViewState>({ status: 'idle' })
   const controllerRef = useRef<AbortController | null>(null)
@@ -107,13 +110,13 @@ function App() {
 
       if (finalJob.status === 'completed') {
         if (!finalJob.result) {
-          throw new ApiError('The analysis completed without a result.', 502, 'missing_analysis_result')
+          throw new ApiError(t('missingAnalysisResult'), 502, 'missing_analysis_result')
         }
         setView({ status: 'success', analysis: finalJob.result })
       } else if (finalJob.status === 'failed') {
         const error = finalJob.error
         throw new ApiError(
-          error?.message ?? 'The analysis worker failed to produce a result.',
+          error?.message ?? t('workerFailed'),
           502,
           error?.code ?? 'analysis_failed',
           error?.details,
@@ -126,7 +129,7 @@ function App() {
         return
       }
 
-      const normalizedError = error instanceof Error ? error : new Error('The analysis failed unexpectedly.')
+      const normalizedError = error instanceof Error ? error : new Error(t('unexpectedFailure'))
       setView({ status: 'error', error: normalizedError })
     } finally {
       if (controllerRef.current === controller) {
@@ -167,13 +170,17 @@ function App() {
   return (
     <main className="app-shell">
       <div className="page-width">
+        <header className="app-toolbar">
+          <p className="toolbar-name">{t('domainAnalyzer')}</p>
+          <LanguageSwitcher />
+        </header>
         <section className="hero" aria-labelledby="app-title">
-          <p className="eyebrow">Network intelligence</p>
-          <h1 id="app-title">Domain Analyzer</h1>
-          <p className="hero-copy">Inspect the public footprint of a domain in one clear report.</p>
+          <p className="eyebrow">{t('networkIntelligence')}</p>
+          <h1 id="app-title">{t('domainAnalyzer')}</h1>
+          <p className="hero-copy">{t('heroCopy')}</p>
         </section>
 
-        <section className="search-panel" aria-label="Domain analysis form">
+        <section className="search-panel" aria-label={t('domainAnalysisForm')}>
           <AnalysisForm
             domain={domain}
             loading={loading}
@@ -182,7 +189,7 @@ function App() {
             onSubmit={handleSubmit}
           />
           <p className="request-status" role="status" aria-live="polite" aria-busy={loading}>
-            {statusMessage(view)}
+            {statusMessage(view, t)}
           </p>
         </section>
 
@@ -191,8 +198,8 @@ function App() {
         {view.status === 'error' && (
           <section className="error-panel" role="alert">
             <div>
-              <strong>Analysis could not be completed</strong>
-              <p>{errorMessage(view.error)}</p>
+              <strong>{t('analysisCouldNotBeCompleted')}</strong>
+              <p>{errorMessage(view.error, t)}</p>
             </div>
             <button
               type="button"
@@ -200,7 +207,7 @@ function App() {
               onClick={() => void runAnalysis(domain.trim())}
               disabled={!domain.trim()}
             >
-              Try again
+              {t('tryAgain')}
             </button>
           </section>
         )}

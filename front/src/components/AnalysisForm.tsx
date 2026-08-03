@@ -1,5 +1,7 @@
 import type { ChangeEvent, FormEvent } from 'react'
 
+import { useI18n } from '../i18n'
+
 interface AnalysisFormProps {
   domain: string
   loading: boolean
@@ -9,9 +11,11 @@ interface AnalysisFormProps {
 }
 
 function AnalysisForm({ domain, loading, onChange, onCancel, onSubmit }: AnalysisFormProps) {
+  const { t } = useI18n()
+
   return (
     <form className="analysis-form" onSubmit={onSubmit}>
-      <label htmlFor="domain-input">Domain name</label>
+      <label htmlFor="domain-input">{t('domainName')}</label>
       <div className="form-row">
         <input
           id="domain-input"
@@ -28,17 +32,16 @@ function AnalysisForm({ domain, loading, onChange, onCancel, onSubmit }: Analysi
         />
         {loading ? (
           <button type="button" className="button button-secondary" onClick={onCancel}>
-            Cancel
+            {t('cancel')}
           </button>
         ) : (
           <button type="submit" className="button button-primary" disabled={!domain.trim()}>
-            Analyze domain
+            {t('analyzeDomain')}
           </button>
         )}
       </div>
       <p id="domain-help" className="form-help">
-        Enter a public domain. The backend validates the target and returns partial results when a provider is
-        unavailable.
+        {t('domainHelp')}
       </p>
     </form>
   )
