@@ -432,6 +432,10 @@ summary:focus-visible {
   margin-top: 1rem;
 }
 
+.result-details-content {
+  margin-top: 0.75rem;
+}
+
 .summary-card,
 .probe-card,
 .latency-card {
@@ -502,15 +506,6 @@ summary:focus-visible {
   margin: 0;
   color: #f2f5fc;
   font-size: 1.1rem;
-}
-
-.security-summary-content {
-  margin-top: 0.75rem;
-}
-
-.security-score-row {
-  display: flex;
-  justify-content: flex-end;
 }
 
 .security-score {

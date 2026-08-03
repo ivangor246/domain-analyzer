@@ -77,20 +77,18 @@ function SecuritySummary({ analysis }: SecuritySummaryProps) {
     <section className="security-summary" aria-labelledby="security-signals-heading">
       <div className="security-summary-heading">
         <h3 id="security-signals-heading">{t('securitySignals')}</h3>
+        <span className={`security-score score-${tone}`} aria-label={t('securityScore', { score })}>
+          {score}
+        </span>
       </div>
+      <p className="security-summary-note">
+        {summary.assessedSignals > 0
+          ? t('securityNoteScored', { count: summary.assessedSignals })
+          : t('securityNoteUnavailable')}
+      </p>
       <details className="result-details">
         <summary>{t('showResults')}</summary>
-        <div className="security-summary-content">
-          <div className="security-score-row">
-            <span className={`security-score score-${tone}`} aria-label={t('securityScore', { score })}>
-              {score}
-            </span>
-          </div>
-          <p className="security-summary-note">
-            {summary.assessedSignals > 0
-              ? t('securityNoteScored', { count: summary.assessedSignals })
-              : t('securityNoteUnavailable')}
-          </p>
+        <div className="result-details-content">
           <SecurityFindingList summary={summary} />
         </div>
       </details>

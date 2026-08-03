@@ -61,7 +61,7 @@ function ResultSection({ title, description, wide = false, children }: ResultSec
       </div>
       <details className="result-details">
         <summary>{t('showResults')}</summary>
-        {children}
+        <div className="result-details-content">{children}</div>
       </details>
     </section>
   )
@@ -465,7 +465,7 @@ function AnalysisMetadataPanel({ metadata }: { metadata?: AnalysisMetadata | nul
         <SummaryCard label={t('checksReported')} value={Object.keys(metadata.checks).length} />
       </div>
       {Object.keys(metadata.checks).length > 0 && (
-        <details className="metadata-details" open>
+        <details className="metadata-details">
           <summary>{t('checkSources')}</summary>
           <div className="table-wrap">
             <table>
