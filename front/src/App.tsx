@@ -171,14 +171,8 @@ function App() {
     <main className="app-shell">
       <div className="page-width">
         <header className="app-toolbar">
-          <p className="toolbar-name">{t('domainAnalyzer')}</p>
           <LanguageSwitcher />
         </header>
-        <section className="hero" aria-labelledby="app-title">
-          <p className="eyebrow">{t('networkIntelligence')}</p>
-          <h1 id="app-title">{t('domainAnalyzer')}</h1>
-          <p className="hero-copy">{t('heroCopy')}</p>
-        </section>
 
         <section className="search-panel" aria-label={t('domainAnalysisForm')}>
           <AnalysisForm
