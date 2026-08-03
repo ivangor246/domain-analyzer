@@ -1,6 +1,8 @@
+import { type ReactNode } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
 
+import { LanguageProvider } from '../i18n'
 import AnalysisForm from './AnalysisForm'
 import AnalysisProgress from './AnalysisProgress'
 import AnalysisResults from './AnalysisResults'
@@ -53,9 +55,13 @@ const analysis: DomainAnalysis = {
   ],
 }
 
+function renderLocalized(node: ReactNode) {
+  return renderToStaticMarkup(<LanguageProvider>{node}</LanguageProvider>)
+}
+
 describe('frontend status components', () => {
   it('renders queued and running progress for a loading analysis', () => {
-    const markup = renderToStaticMarkup(
+    const markup = renderLocalized(
       <AnalysisProgress
         progress={[
           { check: 'dns', status: 'queued', duration_ms: null },
@@ -73,9 +79,10 @@ describe('frontend status components', () => {
   })
 
   it('renders partial results and actionable accessibility landmarks', () => {
-    const markup = renderToStaticMarkup(<AnalysisResults analysis={analysis} />)
+    const markup = renderLocalized(<AnalysisResults analysis={analysis} />)
 
     expect(markup).toContain('Analysis report')
+    expect(markup).toContain('Complete with 1 warning')
     expect(markup).toContain('Some checks were unavailable')
     expect(markup).toContain('aria-label="Analysis warnings"')
     expect(markup).toContain('RDAP provider unavailable')
@@ -97,7 +104,7 @@ describe('frontend status components', () => {
     const onCancel = () => undefined
     const onSubmit = () => undefined
 
-    const idleMarkup = renderToStaticMarkup(
+    const idleMarkup = renderLocalized(
       <AnalysisForm
         domain="example.com"
         loading={false}
@@ -106,7 +113,7 @@ describe('frontend status components', () => {
         onSubmit={onSubmit}
       />,
     )
-    const loadingMarkup = renderToStaticMarkup(
+    const loadingMarkup = renderLocalized(
       <AnalysisForm
         domain="example.com"
         loading

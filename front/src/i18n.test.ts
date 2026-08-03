@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { detectBrowserLanguage } from './i18n'
+import { detectBrowserLanguage } from './i18n-utils'
 
 describe('detectBrowserLanguage', () => {
   it('selects the first supported browser language', () => {

@@ -1,5 +1,6 @@
 import type { DomainAnalysis } from '../api/types'
-import { useI18n, type Translate } from '../i18n'
+import { useI18n } from '../i18n-context'
+import type { Translate } from '../i18n-utils'
 import { getSecuritySummary, type SecuritySummary as SecuritySummaryData } from '../utils/security'
 
 interface SecuritySummaryProps {

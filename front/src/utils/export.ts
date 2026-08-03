@@ -65,6 +65,10 @@ export function formatAnalysisMarkdown(analysis: DomainAnalysis, exportedAt = ne
   const lines = [
     '# Domain Analyzer report',
     '',
+    '## Report metadata',
+    '',
+    '| Field | Value |',
+    '| --- | --- |',
     tableRow('Domain', analysis.domain),
     tableRow('Exported at', exportedAt.toISOString()),
     '',

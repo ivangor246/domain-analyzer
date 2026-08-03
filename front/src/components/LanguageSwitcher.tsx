@@ -1,4 +1,4 @@
-import { useI18n } from '../i18n'
+import { useI18n } from '../i18n-context'
 
 function LanguageSwitcher() {
   const { language, setLanguage, t } = useI18n()

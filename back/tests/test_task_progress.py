@@ -1,4 +1,5 @@
 import unittest
+from unittest.mock import patch
 
 from app.schemas.analysis import ANALYSIS_CHECKS
 from app.tasks.domain import TaskProgressReporter
@@ -13,6 +14,14 @@ class FakeTask:
 
 
 class TaskProgressReporterTestCase(unittest.IsolatedAsyncioTestCase):
+    async def asyncSetUp(self) -> None:
+        async def run_inline(function, /, *args, **kwargs):
+            return function(*args, **kwargs)
+
+        self.to_thread = patch('app.tasks.domain.asyncio.to_thread', new=run_inline)
+        self.to_thread.start()
+        self.addCleanup(self.to_thread.stop)
+
     async def test_publishes_initial_and_changed_progress_without_duplicates(self) -> None:
         task = FakeTask()
         reporter = TaskProgressReporter(task)

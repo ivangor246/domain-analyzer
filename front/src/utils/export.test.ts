@@ -58,6 +58,7 @@ describe('report export', () => {
     const result = formatAnalysisMarkdown(analysis, new Date('2026-08-01T12:00:00Z'))
 
     expect(result).toContain('# Domain Analyzer report')
+    expect(result).toContain('## Report metadata\n\n| Field | Value |\n| --- | --- |')
     expect(result).toContain('| Exported at | 2026-08-01T12:00:00.000Z |')
     expect(result).toContain('| rdap | rdap_unavailable | Provider unavailable |')
     expect(result).toContain('## Freshness and sources')

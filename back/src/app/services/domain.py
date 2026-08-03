@@ -414,6 +414,18 @@ async def _collect_results(
         operations['rdap'] = lambda: dependencies.rdap_client.query(domain=rdap_domain, servers=servers)
 
     deadline_expired = asyncio.Event()
+    if deadline - asyncio.get_running_loop().time() <= 0:
+        for check in operations:
+            await _record_unstarted_timeout(
+                check,
+                domain,
+                analysis_id,
+                task_id,
+                progress_callback,
+                observations,
+            )
+        return {check: asyncio.TimeoutError() for check in operations}
+
     tasks = {
         check: asyncio.create_task(
             _run_check(

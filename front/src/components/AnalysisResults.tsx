@@ -8,7 +8,8 @@ import type {
   Propagation,
   SSLData,
 } from '../api/types'
-import { useI18n, type Translate } from '../i18n'
+import { useI18n } from '../i18n-context'
+import type { Translate } from '../i18n-utils'
 import {
   downloadFile,
   filenameForDomain,
@@ -503,6 +504,7 @@ function AnalysisMetadataPanel({ metadata }: { metadata?: AnalysisMetadata | nul
 
 function AnalysisResults({ analysis }: AnalysisResultsProps) {
   const { locale, t } = useI18n()
+  const warningCount = analysis.analysis_errors.length
 
   const exportJson = () => {
     downloadFile(formatAnalysisJson(analysis), filenameForDomain(analysis.domain, 'json'), 'application/json')
@@ -520,7 +522,12 @@ function AnalysisResults({ analysis }: AnalysisResultsProps) {
           <h2 id="results-heading">{analysis.domain}</h2>
         </div>
         <div className="results-actions">
-          <span className="result-state">{t('completeWithWarnings', { count: analysis.analysis_errors.length })}</span>
+          <span className="result-state">
+            {t('completeWithWarnings', {
+              count: warningCount,
+              warningLabel: t(warningCount === 1 ? 'warning' : 'warnings'),
+            })}
+          </span>
           <div className="export-actions" aria-label={t('exportReport')}>
             <button type="button" className="button button-secondary" onClick={exportJson}>
               {t('json')}
@@ -539,7 +546,7 @@ function AnalysisResults({ analysis }: AnalysisResultsProps) {
         <SummaryCard label={t('nameservers')} value={analysis.nameservers.length} />
       </div>
 
-      {analysis.analysis_errors.length > 0 && (
+      {warningCount > 0 && (
         <aside className="warning-panel" aria-label={t('analysisWarnings')}>
           <strong>{t('someChecksUnavailable')}</strong>
           <ul>

@@ -12,6 +12,9 @@ from app.schemas.analysis import AnalysisJobSchema, AnalysisStatus
 
 class ApiTestCase(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self) -> None:
+        self.redis_rate_limit_enabled = patch.object(settings, 'RATE_LIMIT_REDIS_ENABLED', False)
+        self.redis_rate_limit_enabled.start()
+        self.addCleanup(self.redis_rate_limit_enabled.stop)
         self.transport = httpx.ASGITransport(app=create_app())
         self.client = httpx.AsyncClient(transport=self.transport, base_url='http://test')
 
@@ -54,7 +57,8 @@ class ApiTestCase(unittest.IsolatedAsyncioTestCase):
         )
 
     async def test_metrics_endpoint_returns_prometheus_text(self) -> None:
-        response = await self.client.get('/api/metrics')
+        with patch.object(metrics_api.queue_tracker, 'depth', new=AsyncMock(side_effect=ConnectionError)):
+            response = await self.client.get('/api/metrics')
 
         self.assertEqual(response.status_code, 200)
         self.assertTrue(response.headers['content-type'].startswith('text/plain; version=0.0.4'))

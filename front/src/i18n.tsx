@@ -1,10 +1,7 @@
-/* eslint-disable react-refresh/only-export-components */
+import { useEffect, useMemo, useState, type ReactNode } from 'react'
 
-import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react'
-
-export type Language = 'en' | 'ru'
-
-export type Translate = (key: string, params?: Record<string, string | number>) => string
+import { I18nContext } from './i18n-context'
+import { detectBrowserLanguage, type Language, type Translate } from './i18n-utils'
 
 const STORAGE_KEY = 'domain-analyzer-language'
 
@@ -51,7 +48,9 @@ const messages: Record<Language, Record<string, string>> = {
     ports: 'Port scan',
     latency: 'TCP latency',
     analysisReport: 'Analysis report',
-    completeWithWarnings: 'Complete with {count} warning(s)',
+    completeWithWarnings: 'Complete with {count} {warningLabel}',
+    warning: 'warning',
+    warnings: 'warnings',
     exportReport: 'Export report',
     json: 'JSON',
     markdown: 'Markdown',
@@ -214,6 +213,8 @@ const messages: Record<Language, Record<string, string>> = {
     latency: 'Задержка TCP',
     analysisReport: 'Отчёт анализа',
     completeWithWarnings: 'Завершено с предупреждениями: {count}',
+    warning: 'предупреждение',
+    warnings: 'предупреждения',
     exportReport: 'Экспортировать отчёт',
     json: 'JSON',
     markdown: 'Markdown',
@@ -339,15 +340,6 @@ function isLanguage(value: string | null): value is Language {
   return value === 'en' || value === 'ru'
 }
 
-export function detectBrowserLanguage(languages: readonly string[]): Language {
-  const supportedLanguage = languages.find((language) => {
-    const normalizedLanguage = language.toLowerCase()
-    return normalizedLanguage.startsWith('ru') || normalizedLanguage.startsWith('en')
-  })
-
-  return supportedLanguage?.toLowerCase().startsWith('ru') ? 'ru' : 'en'
-}
-
 function readStoredLanguage(): Language | null {
   if (typeof window === 'undefined') {
     return null
@@ -390,22 +382,6 @@ function createTranslator(language: Language): Translate {
   return (key, params) => interpolate(messages[language][key] ?? messages.en[key] ?? key, params)
 }
 
-interface I18nContextValue {
-  language: Language
-  locale: string
-  setLanguage: (language: Language) => void
-  t: Translate
-}
-
-const defaultContext: I18nContextValue = {
-  language: 'en',
-  locale: 'en-US',
-  setLanguage: () => undefined,
-  t: createTranslator('en'),
-}
-
-const I18nContext = createContext<I18nContextValue>(defaultContext)
-
 export function LanguageProvider({ children }: { children: ReactNode }) {
   const [language, setLanguage] = useState<Language>(initialLanguage)
   const locale = language === 'ru' ? 'ru-RU' : 'en-US'
@@ -425,8 +401,4 @@ export function LanguageProvider({ children }: { children: ReactNode }) {
   const value = useMemo(() => ({ language, locale, setLanguage, t }), [language, locale, t])
 
   return <I18nContext.Provider value={value}>{children}</I18nContext.Provider>
-}
-
-export function useI18n(): I18nContextValue {
-  return useContext(I18nContext)
 }

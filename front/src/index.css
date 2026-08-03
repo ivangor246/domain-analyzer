@@ -969,6 +969,11 @@ summary {
     width: 100%;
   }
 
+  .form-row input,
+  .error-panel > div {
+    flex: 0 1 auto;
+  }
+
   .summary-grid,
   .metadata-summary,
   .record-groups,

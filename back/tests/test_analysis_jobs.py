@@ -1,6 +1,6 @@
 from datetime import datetime, timezone
 import unittest
-from unittest.mock import Mock, patch
+from unittest.mock import AsyncMock, Mock, patch
 
 from app.core.exceptions import AnalysisConflictError, DomainValidationError
 from app.schemas.analysis import AnalysisStatus
@@ -84,6 +84,15 @@ class AnalysisJobServiceTestCase(unittest.IsolatedAsyncioTestCase):
         self.store = FakeStore()
         self.broker = FakeBroker()
         self.service = AnalysisJobService(store=self.store, broker=self.broker)
+        self.mark_analysis_queued = patch('app.services.analysis_jobs.mark_analysis_queued', new_callable=AsyncMock)
+        self.remove_analysis_from_queue = patch(
+            'app.services.analysis_jobs.remove_analysis_from_queue',
+            new_callable=AsyncMock,
+        )
+        self.queued = self.mark_analysis_queued.start()
+        self.remove_analysis_from_queue.start()
+        self.addCleanup(self.mark_analysis_queued.stop)
+        self.addCleanup(self.remove_analysis_from_queue.stop)
 
     async def test_create_normalizes_domain_and_supports_idempotency(self) -> None:
         first = await self.service.create('https://Example.com/', idempotency_key='request-1', request_id='http-1')
@@ -94,6 +103,7 @@ class AnalysisJobServiceTestCase(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(first.status, AnalysisStatus.QUEUED)
         self.assertEqual(len(self.broker.enqueued), 1)
         self.assertEqual(self.broker.request_ids, ['http-1'])
+        self.queued.assert_awaited_once_with(first.id)
 
     async def test_idempotency_key_cannot_be_reused_for_another_domain(self) -> None:
         await self.service.create('example.com', idempotency_key='request-1')

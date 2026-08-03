@@ -6,7 +6,8 @@ import AnalysisForm from './components/AnalysisForm'
 import AnalysisProgress from './components/AnalysisProgress'
 import AnalysisResults from './components/AnalysisResults'
 import LanguageSwitcher from './components/LanguageSwitcher'
-import { useI18n, type Translate } from './i18n'
+import { useI18n } from './i18n-context'
+import type { Translate } from './i18n-utils'
 
 type ViewState =
   | { status: 'idle' }
