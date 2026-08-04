@@ -82,7 +82,7 @@ jobs:
 
       - name: Export installed packages
         working-directory: back
-        run: poetry run pip list --format=freeze > backend-requirements.txt
+        run: poetry run pip list --exclude-editable --format=freeze > backend-requirements.txt
 
       - name: Install pip-audit
         run: pip install pip-audit
