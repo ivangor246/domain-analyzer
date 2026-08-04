@@ -40,6 +40,7 @@ For safety, the backend only analyzes domains that resolve to public IP addresse
 ├── Makefile                 # Repository-level backend commands
 ├── PRIVACY.md                # Self-hosted data-flow template
 ├── README.md
+├── RELEASE_CHECKLIST.md       # Release-candidate validation
 └── SECURITY.md               # Vulnerability-reporting policy
 ```
 
@@ -298,6 +299,8 @@ Before a public deployment:
 There is currently no built-in authentication or ownership verification. The service is an infrastructure inspection tool for authorized public targets, not a general-purpose scanning service. Review privacy, provider terms, and acceptable-use requirements before launch.
 
 See [SECURITY.md](SECURITY.md), [PRIVACY.md](PRIVACY.md), and [ACCEPTABLE_USE.md](ACCEPTABLE_USE.md) for the security policy, self-hosted data-flow template, and acceptable-use boundaries.
+
+Use [RELEASE_CHECKLIST.md](RELEASE_CHECKLIST.md) to validate a release candidate.
 
 ## License
 
