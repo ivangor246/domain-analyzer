@@ -1,6 +1,6 @@
 # Domain Analyzer
 
-Domain Analyzer is an asynchronous FastAPI service that collects technical information about a domain and returns it as one structured response. The repository is organized for an independent backend and a future frontend application.
+Domain Analyzer is an asynchronous FastAPI service that collects technical information about a domain and returns it as one structured response. The repository contains independent backend and frontend applications.
 
 ## Current capabilities
 
@@ -34,9 +34,12 @@ For safety, the backend only analyzes domains that resolve to public IP addresse
 │   ├── docker-compose.yml   # API, Celery worker, and Redis
 │   └── entrypoint.sh
 ├── front/                   # Vite + TypeScript + React application
-├── AGENTS.md                # Instructions for AI agents
+├── ACCEPTABLE_USE.md         # Operational boundaries
+├── LICENSE                   # Apache License 2.0
 ├── Makefile                 # Repository-level backend commands
-└── README.md
+├── PRIVACY.md                # Self-hosted data-flow template
+├── README.md
+└── SECURITY.md               # Vulnerability-reporting policy
 ```
 
 The frontend and backend are intentionally kept in separate directories and are expected to run independently.
@@ -212,7 +215,7 @@ Run the backend checks from `back/`:
 ```bash
 cd back
 poetry check --lock
-PYTHONPATH=src python -m unittest discover -s tests
+PYTHONPATH=src poetry run python -m unittest discover -s tests
 poetry run ruff check src
 poetry run ruff format --check src
 ```
@@ -289,6 +292,10 @@ Before a public deployment:
 - confirm that external RDAP, DNS, GeoIP, and target-domain traffic is permitted by the deployment network;
 - retain structured logs and avoid logging provider response bodies or personal data.
 
-There is currently no built-in authentication or ownership verification. The service is an infrastructure inspection tool for authorized public targets, not a general-purpose scanning service. Review licensing, privacy, provider terms, and acceptable-use requirements before launch; no project license has been selected yet.
+There is currently no built-in authentication or ownership verification. The service is an infrastructure inspection tool for authorized public targets, not a general-purpose scanning service. Review privacy, provider terms, and acceptable-use requirements before launch.
 
-See [SECURITY.md](SECURITY.md), [PRIVACY.md](PRIVACY.md), and [ACCEPTABLE_USE.md](ACCEPTABLE_USE.md) for the security policy, self-hosted data-flow template, and acceptable-use boundaries. The project license is intentionally not selected yet.
+See [SECURITY.md](SECURITY.md), [PRIVACY.md](PRIVACY.md), and [ACCEPTABLE_USE.md](ACCEPTABLE_USE.md) for the security policy, self-hosted data-flow template, and acceptable-use boundaries.
+
+## License
+
+Licensed under the [Apache License, Version 2.0](LICENSE).

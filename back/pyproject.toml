@@ -1,7 +1,8 @@
 [project]
 name = "domain-analyzer"
 version = "0.1.0"
-description = ""
+description = "A self-hosted service for analyzing public domain infrastructure"
+license = "Apache-2.0"
 authors = [
     {name = "ivangor246",email = "ivangor246@gmail.com"}
 ]
