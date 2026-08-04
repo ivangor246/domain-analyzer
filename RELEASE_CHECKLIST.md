@@ -54,6 +54,7 @@ The Compose smoke test validates the API, Redis, and worker readiness in an isol
 
 - Run `npm --prefix front audit --audit-level=high` with access to the npm registry.
 - Confirm that the latest successful GitHub Actions Security workflow completed the frontend `npm audit` and backend `pip-audit` checks.
+- Review the licenses and required notices of production dependencies for compatibility with Apache 2.0 whenever `poetry.lock` or `front/package-lock.json` changes. Add a project `NOTICE` file only when a distributed dependency or copied source requires notice preservation.
 - Review dependency updates and provider terms before changing default upstream services.
 - Keep Docker base images and GitHub Actions revisions under Dependabot review.
 
