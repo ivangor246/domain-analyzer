@@ -33,6 +33,7 @@ For safety, the backend only analyzes domains that resolve to public IP addresse
 │   ├── Dockerfile
 │   ├── docker-compose.yml   # API, Celery worker, and Redis
 │   └── entrypoint.sh
+├── DEPLOYMENT.md             # Self-hosted deployment guide
 ├── front/                   # Vite + TypeScript + React application
 ├── ACCEPTABLE_USE.md         # Operational boundaries
 ├── LICENSE                   # Apache License 2.0
@@ -280,6 +281,8 @@ docker run --rm -p 4173:80 domain-analyzer-front
 ## Deployment notes
 
 The backend and frontend are deployed independently. The backend image is built from `back/` and serves the API on port 8000. The frontend image is built from `front/`, serves the Vite output through Nginx on port 80, and receives `VITE_API_URL` at image build time.
+
+See [DEPLOYMENT.md](DEPLOYMENT.md) for a production-oriented self-hosting guide.
 
 Before a public deployment:
 
