@@ -34,6 +34,8 @@ Use the exact public frontend origins in `CORS_ORIGINS`. Do not use a wildcard. 
 
 Keep the default `REDIS_URL=redis://redis:6379/0` when using the included Compose configuration. Redis has no published host port and must remain inaccessible from public networks.
 
+The default `GEOIP_URL` points to the free ip-api batch API. It is limited to non-commercial use, 45 requests per minute, and HTTP transport. Configure an authorized ip-api-compatible batch endpoint before a commercial deployment or when encrypted transport is required. See the [ip-api terms](https://ip-api.com/docs/legal) and [API documentation](https://ip-api.com/docs/api:json).
+
 Review and size these limits for the available host resources and expected authorized traffic:
 
 - `RATE_LIMIT_REQUESTS` and `RATE_LIMIT_WINDOW_SECONDS`;

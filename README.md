@@ -84,6 +84,10 @@ The complete list of supported settings and safe defaults is available in `back/
 
 Do not commit `back/.env` or place secrets in the repository.
 
+## External provider limits
+
+The default GeoIP endpoint is the free `ip-api.com` batch API. Its terms limit use to non-commercial environments and 45 requests per minute from one source IP; the free endpoint is HTTP-only. Configure `GEOIP_URL` with an authorized endpoint compatible with the ip-api batch API when those limits, commercial use, or encrypted transport are required. The provider receives the resolved public IP addresses submitted for GeoIP lookup. Review the [ip-api terms](https://ip-api.com/docs/legal) and [API documentation](https://ip-api.com/docs/api:json) before deployment.
+
 ## Run with Docker
 
 From the repository root:
