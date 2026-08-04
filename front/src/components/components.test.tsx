@@ -6,7 +6,7 @@ import { LanguageProvider } from '../i18n'
 import AnalysisForm from './AnalysisForm'
 import AnalysisProgress from './AnalysisProgress'
 import AnalysisResults from './AnalysisResults'
-import type { DomainAnalysis } from '../api/types'
+import type { DomainAnalysis, HTTPProbeResult } from '../api/types'
 
 const analysis: DomainAnalysis = {
   domain: 'example.com',
@@ -55,6 +55,25 @@ const analysis: DomainAnalysis = {
   ],
 }
 
+const redirectingProbe: HTTPProbeResult = {
+  reachable: true,
+  status_code: 301,
+  final_url: 'https://example.com',
+  redirect_chain: ['http://example.com'],
+  response_time_ms: 25,
+  server: null,
+  x_powered_by: null,
+  via: null,
+  content_type: 'text/html',
+  cache_control: null,
+  content_security_policy: null,
+  strict_transport_security: null,
+  x_frame_options: null,
+  x_content_type_options: null,
+  referrer_policy: null,
+  permissions_policy: null,
+}
+
 function renderLocalized(node: ReactNode) {
   return renderToStaticMarkup(<LanguageProvider>{node}</LanguageProvider>)
 }
@@ -89,14 +108,21 @@ describe('frontend status components', () => {
     expect(markup).toContain('Security signals')
     expect(markup).toContain('<div class="security-summary-heading"><h3 id="security-signals-heading">Security signals</h3><span class="security-score')
     expect(markup).toContain('<h3 id="registration-heading">Registration</h3>')
-    expect(markup).toContain('<details class="result-details"><summary>Results</summary>')
-    expect(markup).not.toContain('<details class="result-details" open>')
-    expect(markup).not.toContain('<details class="metadata-details" open>')
+    expect(markup).toContain('<details class="result-details" open=""><summary>Results</summary>')
+    expect(markup).toContain('<details class="metadata-details" open="">')
     expect(markup).not.toContain('Heuristic review')
     expect(markup).toContain('Freshness and sources')
     expect(markup).toContain('https://data.iana.org')
     expect(markup).toContain('scope="col"')
     expect(markup).toContain('scope="row"')
+  })
+
+  it('expands redirect details by default', () => {
+    const markup = renderLocalized(
+      <AnalysisResults analysis={{ ...analysis, http: { http: redirectingProbe, https: null } }} />,
+    )
+
+    expect(markup).toContain('<details open=""><summary>1 redirect(s)</summary>')
   })
 
   it('keeps the domain form accessible and exposes cancellation while loading', () => {

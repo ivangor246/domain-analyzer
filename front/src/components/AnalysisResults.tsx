@@ -60,7 +60,7 @@ function ResultSection({ title, description, wide = false, children }: ResultSec
         <h3 id={id}>{title}</h3>
         {description && <p>{description}</p>}
       </div>
-      <details className="result-details">
+      <details className="result-details" open>
         <summary>{t('showResults')}</summary>
         <div className="result-details-content">{children}</div>
       </details>
@@ -315,7 +315,7 @@ function HTTPProbe({ label, probe }: { label: string; probe: HTTPProbeResult | n
         <Field label={t('finalUrl')} value={probe.final_url} />
       </dl>
       {probe.redirect_chain.length > 0 && (
-        <details>
+        <details open>
           <summary>{t('redirects', { count: probe.redirect_chain.length })}</summary>
           <StringList values={probe.redirect_chain} />
         </details>
@@ -466,7 +466,7 @@ function AnalysisMetadataPanel({ metadata }: { metadata?: AnalysisMetadata | nul
         <SummaryCard label={t('checksReported')} value={Object.keys(metadata.checks).length} />
       </div>
       {Object.keys(metadata.checks).length > 0 && (
-        <details className="metadata-details">
+        <details className="metadata-details" open>
           <summary>{t('checkSources')}</summary>
           <div className="table-wrap">
             <table>

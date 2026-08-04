@@ -87,7 +87,7 @@ function SecuritySummary({ analysis }: SecuritySummaryProps) {
           ? t('securityNoteScored', { count: summary.assessedSignals })
           : t('securityNoteUnavailable')}
       </p>
-      <details className="result-details">
+      <details className="result-details" open>
         <summary>{t('showResults')}</summary>
         <div className="result-details-content">
           <SecurityFindingList summary={summary} />
