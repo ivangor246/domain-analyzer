@@ -78,11 +78,13 @@ jobs:
 
       - name: Install backend dependencies
         working-directory: back
-        run: poetry install --no-interaction
+        run: poetry install --only main --no-root --no-interaction
 
       - name: Export installed packages
         working-directory: back
-        run: poetry run pip list --exclude-editable --format=freeze > backend-requirements.txt
+        run: |
+          set -o pipefail
+          poetry run pip list --format=freeze | grep -v '^pip==' > backend-requirements.txt
 
       - name: Install pip-audit
         run: pip install pip-audit
