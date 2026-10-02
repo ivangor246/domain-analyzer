@@ -7,10 +7,12 @@ install:
 
 # develop
 up:
-	docker compose -f $(BACKEND_COMPOSE) up -d --build --force-recreate $(for)
+	app_port=$$(sh scripts/resolve-app-port.sh) && \
+	APP_PORT=$$app_port docker compose -f $(BACKEND_COMPOSE) up -d --build --force-recreate $(for)
 
 dev:
-	DEV_MODE=True docker compose -f $(BACKEND_COMPOSE) watch
+	app_port=$$(sh scripts/resolve-app-port.sh) && \
+	APP_PORT=$$app_port DEV_MODE=True docker compose -f $(BACKEND_COMPOSE) watch
 
 dev-all:
 	sh scripts/dev-all.sh

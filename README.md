@@ -101,7 +101,7 @@ make rm       # Stop services and remove volumes
 make clear    # Remove services, volumes, images, and orphans
 ```
 
-The API is available at `http://localhost:8000`.
+The API is available at `http://localhost:8000`. The port comes from `APP_PORT` (in the shell or `back/.env`); if it is busy, `make up`, `make dev`, and `make dev-all` use the next free port and print it.
 
 ## Run the full project locally
 
@@ -119,7 +119,7 @@ make install
 make dev-all
 ```
 
-The combined command starts the backend, worker, Redis, and Vite frontend. Open the frontend at `http://localhost:5173`; the backend API is available at `http://localhost:8000`, with Swagger UI at `http://localhost:8000/api/docs`.
+The combined command starts the backend, worker, Redis, and Vite frontend. Open the frontend at `http://localhost:5173`; the backend API is available at `http://localhost:8000`, with Swagger UI at `http://localhost:8000/api/docs`. When the backend falls back to another port, the frontend receives the matching `VITE_API_URL`.
 
 Press `Ctrl+C` in the `make dev-all` terminal to stop both development processes. Use `make stop` if backend containers remain running.
 

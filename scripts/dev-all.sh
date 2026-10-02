@@ -22,6 +22,11 @@ cleanup() {
 
 trap cleanup INT TERM EXIT
 
+# Resolve the backend port once so the frontend talks to the same port.
+APP_PORT=$(sh scripts/resolve-app-port.sh)
+VITE_API_URL="${VITE_API_URL:-http://localhost:${APP_PORT##*:}}"
+export APP_PORT VITE_API_URL
+
 make dev &
 backend_pid=$!
 
